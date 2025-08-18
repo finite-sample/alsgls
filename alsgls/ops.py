@@ -73,7 +73,10 @@ def cg_solve(operator_mv, b, x0=None, maxit=500, tol=1e-7, M_pre=None):
     for _ in range(maxit):
         iterations += 1
         Ap = operator_mv(p)
-        alpha = rz_old / max(1e-30, float(p @ Ap))
+        pAp = float(p @ Ap)
+        if pAp <= 0:
+            raise ValueError("Operator is not SPD: p^T A p \u2264 0")
+        alpha = rz_old / pAp
         x += alpha * p
         r -= alpha * Ap
         res_norm = np.linalg.norm(r)
@@ -81,7 +84,9 @@ def cg_solve(operator_mv, b, x0=None, maxit=500, tol=1e-7, M_pre=None):
             break
         z = M_pre(r) if M_pre is not None else r
         rz_new = float(r @ z)
-        beta = rz_new / max(1e-30, rz_old)
+        if rz_old <= 0:
+            raise ValueError("Preconditioner is not SPD: r^T z \u2264 0")
+        beta = rz_new / rz_old
         p = z + beta * p
         rz_old = rz_new
     info = {"iterations": iterations, "residual": float(np.linalg.norm(r))}

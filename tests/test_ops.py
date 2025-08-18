@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 import sys
 from pathlib import Path
 
@@ -10,6 +11,7 @@ from alsgls.ops import (
     apply_siginv_to_matrix,
     stack_B_list,
     unstack_B_vec,
+    cg_solve,
 )
 
 
@@ -52,3 +54,30 @@ def test_stack_and_unstack_B_list():
     # Each recovered block should match the original exactly
     for orig, rec in zip(B_list, recovered):
         assert np.allclose(orig, rec)
+
+
+def test_cg_solve_raises_on_non_spd_operator():
+    """cg_solve should fail when the operator is not SPD."""
+    A = np.array([[1.0, 0.0], [0.0, -1.0]])
+
+    def mv(x):
+        return A @ x
+
+    b = np.array([1.0, 1.0])
+    with pytest.raises(ValueError, match=r"p\^T A p"):
+        cg_solve(mv, b)
+
+
+def test_cg_solve_raises_on_non_spd_preconditioner():
+    """cg_solve should fail when the preconditioner is not SPD."""
+    A = np.array([[2.0, 0.0], [0.0, 1.0]])
+
+    def mv(x):
+        return A @ x
+
+    def M_pre(x):
+        return -x
+
+    b = np.array([1.0, 1.0])
+    with pytest.raises(ValueError, match=r"r\^T z"):
+        cg_solve(mv, b, M_pre=M_pre)
