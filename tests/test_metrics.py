@@ -14,7 +14,7 @@ def test_nll_matches_explicit():
     F = rng.normal(size=(K, k))
     D = rng.uniform(0.5, 1.5, size=K)
 
-    nll_func = nll_per_row(None, R, F, D)
+    nll_func = nll_per_row(R, F, D)
 
     Sigma = F @ F.T + np.diag(D)
     Sigma_inv = np.linalg.inv(Sigma)

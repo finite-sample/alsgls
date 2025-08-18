@@ -53,9 +53,9 @@ def test_als_vs_em_basic():
     # Check that NLL computation works
     R_als = Y_tr - XB_from_Blist(Xs_tr, B_als)
     R_em = Y_tr - XB_from_Blist(Xs_tr, B_em)
-    
-    nll_als = nll_per_row(Y_tr, R_als, F_als, D_als)
-    nll_em = nll_per_row(Y_tr, R_em, F_em, D_em)
+
+    nll_als = nll_per_row(R_als, F_als, D_als)
+    nll_em = nll_per_row(R_em, F_em, D_em)
     
     assert np.isfinite(nll_als) and np.isfinite(nll_em)
 
