@@ -69,10 +69,14 @@ def als_gls(
         # simple diagonal preconditioner: approx diag of H
         def M_pre(v):
             diag_entries = []
-            # Rough diag: X_j^T (Σ^{-1} e_j e_j^T) X_j ≈ X_j^T (Dinv_j) X_j
+            # Rough diag: X_j^T (Σ^{-1} e_j e_j^T) X_j
+            # Only uses per-equation diagonal Σ^{-1}≈Dinv[j]; cross-equation
+            # Woodbury corrections from F are neglected, which can weaken the
+            # preconditioner when cross-equation correlations are strong.
             for j, X in enumerate(Xs):
-                w = float(Dinv[j])
-                diag_entries.extend(w * np.sum(X**2, axis=0))
+                # Explicitly form diag(X_j^T X_j) for clarity
+                diag = np.diag(X.T @ X)
+                diag_entries.extend(Dinv[j] * diag)
             d = np.array(diag_entries) + lam_B
             return v / np.maximum(d, 1e-8)
 
