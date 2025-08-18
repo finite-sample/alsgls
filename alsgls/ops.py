@@ -1,18 +1,29 @@
 import numpy as np
 
 def woodbury_pieces(F: np.ndarray, D: np.ndarray):
-    """
-    Return Dinv, Cf used in Woodbury:
-    Σ = F F^T + diag(D)
-    Σ^{-1} = D^{-1} - D^{-1} F (I + F^T D^{-1} F)^{-1} F^T D^{-1}
+    """Return Woodbury pieces ``Dinv``, ``Cf`` and ``M``.
+
+    Parameters
+    ----------
+    F : np.ndarray
+        Factor loadings (``K × k``).
+    D : np.ndarray
+        Diagonal noise variances (length ``K``).
+
+    Returns
+    -------
+    tuple
+        ``(Dinv, Cf, M)`` where ``Dinv`` is ``1/D`` clipped away from zero,
+        ``Cf`` is ``(I + F^T D^{-1} F)^{-1}``, and ``M`` is the intermediate
+        ``F^T D^{-1} F`` matrix.
     """
     D = np.asarray(D)
     Dinv = 1.0 / np.clip(D, 1e-12, None)
-    FtDinv = (F.T * Dinv)           # k x K (row-scale F.T by Dinv)
-    M = FtDinv @ F                  # k x k == F^T D^{-1} F (reuse FtDinv to avoid re-scaling F)
+    FtDinv = F.T * Dinv                    # k x K (row-scale F.T by Dinv)
+    M = FtDinv @ F                         # k x k == F^T D^{-1} F
     # solve small kxk: (I + M)^{-1}
     Cf = np.linalg.inv(np.eye(F.shape[1]) + M)
-    return Dinv, Cf
+    return Dinv, Cf, M
 
 def apply_siginv_to_matrix(M: np.ndarray, F: np.ndarray, D: np.ndarray, *, Dinv=None, Cf=None):
     """Right-multiply an N×K matrix ``M`` by ``Σ^{-1}`` using Woodbury.
@@ -33,7 +44,7 @@ def apply_siginv_to_matrix(M: np.ndarray, F: np.ndarray, D: np.ndarray, *, Dinv=
         will be computed internally via :func:`woodbury_pieces`.
     """
     if Dinv is None or Cf is None:
-        Dinv, Cf = woodbury_pieces(F, D)
+        Dinv, Cf, _ = woodbury_pieces(F, D)
     # M * Dinv - M*(Dinv F) Cf (F^T Dinv)
     MDinv = M * Dinv[None, :]
     T1 = MDinv @ F              # N x k

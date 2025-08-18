@@ -5,6 +5,7 @@ import sys
 # Ensure package root on path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from alsgls.metrics import nll_per_row
+from alsgls.ops import woodbury_pieces
 
 
 def test_nll_matches_explicit():
@@ -14,7 +15,9 @@ def test_nll_matches_explicit():
     F = rng.normal(size=(K, k))
     D = rng.uniform(0.5, 1.5, size=K)
 
-    nll_func = nll_per_row(R, F, D)
+    nll_uncached = nll_per_row(R, F, D)
+    Dinv, Cf, _ = woodbury_pieces(F, D)
+    nll_cached = nll_per_row(R, F, D, Dinv=Dinv, Cf=Cf)
 
     Sigma = F @ F.T + np.diag(D)
     Sigma_inv = np.linalg.inv(Sigma)
@@ -22,4 +25,5 @@ def test_nll_matches_explicit():
     quad = np.sum(R @ Sigma_inv * R)
     nll_explicit = 0.5 * (quad / N + logdet + K * np.log(2 * np.pi))
 
-    assert np.allclose(nll_func, nll_explicit)
+    assert np.allclose(nll_uncached, nll_explicit)
+    assert np.allclose(nll_cached, nll_explicit)

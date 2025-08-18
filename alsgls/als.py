@@ -53,7 +53,7 @@ def als_gls(
     cg_info = None
     for _ in range(sweeps):
         # Precompute Woodbury pieces once per sweep
-        Dinv, Cf = woodbury_pieces(F, D)
+        Dinv, Cf, _ = woodbury_pieces(F, D)
 
         def A_mv(bvec):
             """Matrix-free normal operator H(B) = X^T Σ^{-1} X · b + lam_B b"""
