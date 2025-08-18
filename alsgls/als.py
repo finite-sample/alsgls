@@ -13,9 +13,23 @@ def als_gls(
     ALS for low-rank+diag GLS.
     Returns (B_list, F, D, mem_MB_est, info)
     """
-    K = Y.shape[1]
+    # Input validation
+    if not isinstance(Xs, list) or len(Xs) == 0:
+        raise ValueError("Xs must be a non-empty list of arrays")
+    if Y.ndim != 2:
+        raise ValueError("Y must be a 2D array")
+    N, K = Y.shape
+    if len(Xs) != K:
+        raise ValueError(f"Number of X matrices ({len(Xs)}) must match Y columns ({K})")
+    for j, X in enumerate(Xs):
+        if X.ndim != 2 or X.shape[0] != N:
+            raise ValueError(f"X[{j}] must be 2D with {N} rows")
+    if not (1 <= k <= min(K, N)):
+        raise ValueError(f"k must be between 1 and min(K={K}, N={N})")
+    if lam_F < 0 or lam_B < 0:
+        raise ValueError("Regularization parameters must be non-negative")
+    
     p_list = [X.shape[1] for X in Xs]
-    N = Y.shape[0]
 
     # init B (OLS per equation)
     B = []
@@ -25,9 +39,10 @@ def als_gls(
         B.append(np.linalg.solve(XtX, Xty))
 
     R = Y - XB_from_Blist(Xs, B)
-    # PCA-like init for F
+    # PCA-like init for F with relative threshold
     U, s, Vt = np.linalg.svd(R, full_matrices=False)
-    r = min(k, (s > 1e-8).sum() or 1)
+    s_thresh = max(s[0] * 1e-10, 1e-8) if len(s) > 0 else 1e-8
+    r = min(k, (s > s_thresh).sum() or 1)
     F = Vt.T[:, :r] * np.sqrt(np.maximum(s[:r], 1e-12))
     if r < k:
         F = np.pad(F, ((0, 0), (0, k - r)))
@@ -81,7 +96,7 @@ def als_gls(
         D = np.maximum(np.mean((R - U @ F.T) ** 2, axis=0), d_floor)
 
         # cheap objective proxy: per-row NLL (using current F,D and R)
-        obj = 0.5 * np.mean((R * (1.0 / np.maximum(D, 1e-12))**0) ** 2)  # proxy; keep monotone-ish
+        obj = 0.5 * np.mean((R * (1.0 / np.sqrt(np.maximum(D, 1e-12)))) ** 2)  # weighted residuals
         if np.isfinite(obj):
             if prev is not None:
                 rel = (prev - obj) / max(1.0, abs(prev))
@@ -89,6 +104,7 @@ def als_gls(
                     break
             prev = obj
 
-    mem_mb_est = (K * F.shape[1] + K) * 8 / 1e6
+    # Memory estimate: F (K×k) + D (K) + U (N×k) + intermediate matrices
+    mem_mb_est = (K * F.shape[1] + K + N * F.shape[1] + K * F.shape[1]) * 8 / 1e6
     info = {"p_list": p_list, "cg": cg_info}
     return B, F, D, mem_mb_est, info

@@ -7,9 +7,23 @@ def em_gls(Xs, Y, k, lam_F=1e-3, lam_B=1e-3, iters=30, d_floor=1e-8):
     Builds Σ^{-1} explicitly (KxK) in the β-step to mimic O(K^2) memory.
     Returns (B_list, F, D, mem_MB_est, info)
     """
-    K = Y.shape[1]
+    # Input validation
+    if not isinstance(Xs, list) or len(Xs) == 0:
+        raise ValueError("Xs must be a non-empty list of arrays")
+    if Y.ndim != 2:
+        raise ValueError("Y must be a 2D array")
+    N, K = Y.shape
+    if len(Xs) != K:
+        raise ValueError(f"Number of X matrices ({len(Xs)}) must match Y columns ({K})")
+    for j, X in enumerate(Xs):
+        if X.ndim != 2 or X.shape[0] != N:
+            raise ValueError(f"X[{j}] must be 2D with {N} rows")
+    if not (1 <= k <= min(K, N)):
+        raise ValueError(f"k must be between 1 and min(K={K}, N={N})")
+    if lam_F < 0 or lam_B < 0:
+        raise ValueError("Regularization parameters must be non-negative")
+    
     p_list = [X.shape[1] for X in Xs]
-    N = Y.shape[0]
 
     # init B (OLS per equation)
     B = []
