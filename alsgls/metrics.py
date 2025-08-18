@@ -23,13 +23,13 @@ def nll_per_row(R, F, D):
         averaged over rows.
     """
     K = R.shape[1]
-    Dinv, Cf = woodbury_pieces(F, D)
+    Dinv, C_inv = woodbury_pieces(F, D)  # C_inv = (I + F^T D^{-1} F)^{-1}
     # tr(R Σ^{-1} R^T) = sum over rows of r Σ^{-1} r^T
     # Efficiently: R Σ^{-1} = apply_siginv_to_matrix(R, F, D), but avoid circular import.
     # Inline Woodbury:
     RDinv = R * Dinv[None, :]
     T1 = RDinv @ F          # N x k
-    T2 = T1 @ Cf            # N x k
+    T2 = T1 @ C_inv         # N x k
     RSinv = RDinv - T2 @ (F.T * Dinv)  # N x K
     quad = float(np.sum(RSinv * R))
     # logdet via matrix determinant lemma:

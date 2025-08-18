@@ -47,9 +47,9 @@ def em_gls(Xs, Y, k, lam_F=1e-3, lam_B=1e-3, iters=30, d_floor=1e-8):
         # β-step (dense normal equations using Σ^{-1})
         Dinv = 1.0 / np.clip(D, 1e-12, None)
         M = F.T @ (F * Dinv[:, None])             # k x k
-        Cf = np.linalg.solve(np.eye(k) + M, np.eye(k))
+        C_inv = np.linalg.solve(np.eye(k) + M, np.eye(k))  # (I + F^T D^{-1} F)^{-1}
         # Build Σ^{-1} explicitly (KxK)
-        Sigma_inv = np.diag(Dinv) - (F * Dinv[:, None]) @ Cf @ (F.T * Dinv[None, :])
+        Sigma_inv = np.diag(Dinv) - (F * Dinv[:, None]) @ C_inv @ (F.T * Dinv[None, :])
 
         A = np.zeros((sum(p_list), sum(p_list)))
         rhs = np.zeros((sum(p_list), 1))

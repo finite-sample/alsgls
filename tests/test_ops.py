@@ -23,8 +23,8 @@ def test_woodbury_pieces_and_apply_siginv_to_matrix():
     Sigma_inv = np.linalg.inv(Sigma)
 
     # Validate woodbury_pieces
-    Dinv, Cf = woodbury_pieces(F, D)
-    Sigma_inv_wb = np.diag(Dinv) - (F * Dinv[:, None]) @ Cf @ (F.T * Dinv)
+    Dinv, C_inv = woodbury_pieces(F, D)
+    Sigma_inv_wb = np.diag(Dinv) - (F * Dinv[:, None]) @ C_inv @ (F.T * Dinv)
     assert np.allclose(Sigma_inv_wb, Sigma_inv, atol=1e-12, rtol=1e-12)
 
     # Validate apply_siginv_to_matrix against explicit inverse
@@ -34,7 +34,7 @@ def test_woodbury_pieces_and_apply_siginv_to_matrix():
     got = apply_siginv_to_matrix(M, F, D)
     assert np.allclose(got, expected, atol=1e-12, rtol=1e-12)
     # with cached pieces
-    got_cached = apply_siginv_to_matrix(M, F, D, Dinv=Dinv, Cf=Cf)
+    got_cached = apply_siginv_to_matrix(M, F, D, Dinv=Dinv, C_inv=C_inv)
     assert np.allclose(got_cached, expected, atol=1e-12, rtol=1e-12)
 
 
