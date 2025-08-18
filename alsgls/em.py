@@ -41,14 +41,6 @@ def em_gls(Xs, Y, k, lam_F=1e-3, lam_B=1e-3, iters=30, d_floor=1e-8):
         F = np.pad(F, ((0, 0), (0, k - r)))
     D = np.maximum(np.var(R, axis=0), d_floor)
 
-    # Precompute Gram blocks X_j^T X_l.
-    # Only upper-triangular blocks are formed and the lower triangle is
-    # recovered via symmetry when assembling the normal-equation matrix.
-    G = [[None] * K for _ in range(K)]
-    for j in range(K):
-        for l in range(j, K):
-            G[j][l] = Xs[j].T @ Xs[l]
-
     for _ in range(iters):
         # E-step-like: nothing explicit (we directly update F,D after β)
 
@@ -65,11 +57,12 @@ def em_gls(Xs, Y, k, lam_F=1e-3, lam_B=1e-3, iters=30, d_floor=1e-8):
         # Blocks A_{j,l} = Σ^{-1}_{l,j} * X_j^T X_l (symmetric in j,l)
         for j in range(K):
             Sj = Sigma_inv[:, j]
+            Xj = Xs[j]
             r0, r1 = p_offsets[j], p_offsets[j + 1]
-            rhs[r0:r1, :] = Xs[j].T @ (Y @ Sj.reshape(-1, 1))
+            rhs[r0:r1, :] = Xj.T @ (Y @ Sj.reshape(-1, 1))
             for l in range(j, K):
                 c0, c1 = p_offsets[l], p_offsets[l + 1]
-                block = G[j][l]
+                block = Xj.T @ Xs[l]
                 scalar = Sj[l]
                 A[r0:r1, c0:c1] = scalar * block
                 if l != j:
