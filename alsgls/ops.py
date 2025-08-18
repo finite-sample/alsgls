@@ -14,11 +14,26 @@ def woodbury_pieces(F: np.ndarray, D: np.ndarray):
     Cf = np.linalg.inv(np.eye(F.shape[1]) + M)
     return Dinv, Cf
 
-def apply_siginv_to_matrix(M: np.ndarray, F: np.ndarray, D: np.ndarray):
+def apply_siginv_to_matrix(M: np.ndarray, F: np.ndarray, D: np.ndarray, *, Dinv=None, Cf=None):
+    """Right-multiply an N×K matrix ``M`` by ``Σ^{-1}`` using Woodbury.
+
+    Parameters
+    ----------
+    M : np.ndarray
+        Matrix to be multiplied on the right by ``Σ^{-1}``.
+    F : np.ndarray
+        Low-rank factor matrix.
+    D : np.ndarray
+        Diagonal entries of the noise covariance.
+    Dinv : np.ndarray, optional
+        Precomputed ``1/D`` vector.  If ``None`` (default), it will be
+        computed internally via :func:`woodbury_pieces`.
+    Cf : np.ndarray, optional
+        Precomputed ``(I + F^T D^{-1} F)^{-1}``.  If ``None`` (default), it
+        will be computed internally via :func:`woodbury_pieces`.
     """
-    Right-multiply an N x K matrix M by Σ^{-1} using Woodbury.
-    """
-    Dinv, Cf = woodbury_pieces(F, D)
+    if Dinv is None or Cf is None:
+        Dinv, Cf = woodbury_pieces(F, D)
     # M * Dinv - M*(Dinv F) Cf (F^T Dinv)
     MDinv = M * Dinv[None, :]
     T1 = MDinv @ F              # N x k
