@@ -53,16 +53,20 @@ def cg_solve(operator_mv, b, x0=None, maxit=500, tol=1e-7, M_pre=None):
     z = M_pre(r) if M_pre is not None else r
     p = z.copy()
     rz_old = float(r @ z)
+    iterations = 0
     for _ in range(maxit):
+        iterations += 1
         Ap = operator_mv(p)
         alpha = rz_old / max(1e-30, float(p @ Ap))
         x += alpha * p
         r -= alpha * Ap
-        if np.linalg.norm(r) <= tol * (np.linalg.norm(b) + 1e-30):
+        res_norm = np.linalg.norm(r)
+        if res_norm <= tol * (np.linalg.norm(b) + 1e-30):
             break
         z = M_pre(r) if M_pre is not None else r
         rz_new = float(r @ z)
         beta = rz_new / max(1e-30, rz_old)
         p = z + beta * p
         rz_old = rz_new
-    return x
+    info = {"iterations": iterations, "residual": float(np.linalg.norm(r))}
+    return x, info

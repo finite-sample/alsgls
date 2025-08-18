@@ -57,6 +57,7 @@ def als_gls(
 
     # main ALS loop
     prev = None
+    cg_info = None
     for _ in range(sweeps):
         # β-step via CG
         rhs_blocks = []
@@ -65,7 +66,7 @@ def als_gls(
             rhs_blocks.append(X.T @ S_y[:, [j]])
         b = np.concatenate(rhs_blocks, axis=0).ravel()
         bvec0 = stack_B_list(B)
-        bvec = cg_solve(A_mv, b, x0=bvec0, maxit=cg_maxit, tol=cg_tol, M_pre=M_pre)
+        bvec, cg_info = cg_solve(A_mv, b, x0=bvec0, maxit=cg_maxit, tol=cg_tol, M_pre=M_pre)
         B = unstack_B_vec(bvec, p_list)
 
         # factor step
@@ -89,5 +90,5 @@ def als_gls(
             prev = obj
 
     mem_mb_est = (K * F.shape[1] + K) * 8 / 1e6
-    info = {"p_list": p_list}
+    info = {"p_list": p_list, "cg": cg_info}
     return B, F, D, mem_mb_est, info
