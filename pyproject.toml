@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "alsgls"
+version = "0.1.0"
+description = "Lightweight low-rank+diag GLS/SUR via ALS with EM baseline"
+readme = "README.md"
+requires-python = ">=3.9"
+authors = [{ name = "Your Name" }]
+license = { text = "MIT" }
+dependencies = [
+  "numpy>=1.21",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0"]
+
+[tool.setuptools]
+packages = ["alsgls"]
