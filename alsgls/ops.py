@@ -11,7 +11,7 @@ def woodbury_pieces(F: np.ndarray, D: np.ndarray):
     FtDinv = (F.T * Dinv)           # k x K (row-scale F.T by Dinv)
     M = FtDinv @ F                  # k x k == F^T D^{-1} F (reuse FtDinv to avoid re-scaling F)
     # solve small kxk: (I + M)^{-1}
-    Cf = np.linalg.inv(np.eye(F.shape[1]) + M)
+    Cf = np.linalg.solve(np.eye(F.shape[1]) + M, np.eye(F.shape[1]))
     return Dinv, Cf
 
 def apply_siginv_to_matrix(M: np.ndarray, F: np.ndarray, D: np.ndarray, *, Dinv=None, Cf=None):
