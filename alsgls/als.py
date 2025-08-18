@@ -80,8 +80,9 @@ def als_gls(
         # diagonal noise
         D = np.maximum(np.mean((R - U @ F.T) ** 2, axis=0), d_floor)
 
-        # cheap objective proxy: per-row NLL (using current F,D and R)
-        obj = 0.5 * np.mean((R * (1.0 / np.maximum(D, 1e-12))**0) ** 2)  # proxy; keep monotone-ish
+        # per-row negative log-likelihood under current F and D
+        RSinv = apply_siginv_to_matrix(R, F, D)
+        obj = 0.5 * np.mean(R * RSinv)
         if np.isfinite(obj):
             if prev is not None:
                 rel = (prev - obj) / max(1.0, abs(prev))
