@@ -34,7 +34,8 @@ def em_gls(Xs, Y, k, lam_F=1e-3, lam_B=1e-3, iters=30, d_floor=1e-8):
 
     R = Y - XB_from_Blist(Xs, B)
     U, s, Vt = np.linalg.svd(R, full_matrices=False)
-    r = min(k, (s > 1e-8).sum() or 1)
+    s_thresh = max(s[0] * 1e-10, 1e-8) if len(s) > 0 else 1e-8
+    r = min(k, (s > s_thresh).sum() or 1)
     F = Vt.T[:, :r] * np.sqrt(np.maximum(s[:r], 1e-12))
     if r < k:
         F = np.pad(F, ((0, 0), (0, k - r)))
