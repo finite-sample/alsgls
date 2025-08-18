@@ -9,7 +9,7 @@ def woodbury_pieces(F: np.ndarray, D: np.ndarray):
     D = np.asarray(D)
     Dinv = 1.0 / np.clip(D, 1e-12, None)
     FtDinv = (F.T * Dinv)           # k x K (row-scale F.T by Dinv)
-    M = F.T @ (F * Dinv[:, None])   # k x k == F^T D^{-1} F
+    M = FtDinv @ F                  # k x k == F^T D^{-1} F (reuse FtDinv to avoid re-scaling F)
     # solve small kxk: (I + M)^{-1}
     Cf = np.linalg.inv(np.eye(F.shape[1]) + M)
     return Dinv, Cf
