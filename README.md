@@ -2,6 +2,35 @@
 
 When a GLS problem involves hundreds of equations, the $K × K$ covariance matrix becomes the computational bottleneck.  A simple statistical remedy is to assume that most of the cross‑equation dependence can be captured by a *handful of latent factors* plus equation‑specific noise.  This “low‑rank + diagonal” assumption slashes the number of unknowns from roughly $K^²$ to about $K×k$ parameters, where **k** (the latent factor rank) is much smaller than $K$.  The model alone, however, does **not** guarantee speed: we still have to fit the parameters.
 
+### Installation
+
+Install the library from PyPI:
+
+```bash
+pip install alsgls
+```
+
+For local development, clone the repo and use an editable install:
+
+```bash
+pip install -e .
+```
+
+### Usage
+
+```python
+from alsgls import als_gls, simulate_sur
+
+Xs_tr, Y_tr, Xs_te, Y_te = simulate_sur(N_tr=240, N_te=120, K=60, p=3, k=4)
+B, F, D, mem, _ = als_gls(Xs_tr, Y_tr, k=4)
+```
+
+See `examples/compare_als_vs_em.py` for a complete ALS versus EM comparison.
+
+### Documentation and notebooks
+
+Background material and reproducible experiments are available in the notebooks under [`als_sim/`](als_sim/), such as [`als_sim/als_comparison.ipynb`](als_sim/als_comparison.ipynb) and [`als_sim/als_sur.ipynb`](als_sim/als_sur.ipynb).
+
 ### Solving low‑rank GLS: EM versus ALS
 
 The classic EM algorithm alternates between updating the regression coefficients $\beta$ and updating the factor loadings $F$ and the diagonal noise $D$.  Even though $\hat{\Sigma}$ is low‑rank, EM’s M‑step recreates the **full** $K × K$ inverse, wiping out the memory win.
