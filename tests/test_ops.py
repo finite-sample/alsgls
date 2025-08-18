@@ -5,7 +5,12 @@ from pathlib import Path
 # Ensure package root is on sys.path
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
-from alsgls.ops import woodbury_pieces, apply_siginv_to_matrix
+from alsgls.ops import (
+    woodbury_pieces,
+    apply_siginv_to_matrix,
+    stack_B_list,
+    unstack_B_vec,
+)
 
 
 def test_woodbury_pieces_and_apply_siginv_to_matrix():
@@ -27,3 +32,19 @@ def test_woodbury_pieces_and_apply_siginv_to_matrix():
     expected = M @ Sigma_inv
     got = apply_siginv_to_matrix(M, F, D)
     assert np.allclose(got, expected, atol=1e-12, rtol=1e-12)
+
+
+def test_stack_and_unstack_B_list():
+    """Stack heterogeneous B_j blocks and recover them."""
+    rng = np.random.default_rng(0)
+    # heterogeneous shapes for each B_j
+    p_list = [1, 3, 2]
+    B_list = [rng.standard_normal((p, 1)) for p in p_list]
+
+    # Stack into vector then unstack back to list
+    b_vec = stack_B_list(B_list)
+    recovered = unstack_B_vec(b_vec, p_list)
+
+    # Each recovered block should match the original exactly
+    for orig, rec in zip(B_list, recovered):
+        assert np.allclose(orig, rec)
