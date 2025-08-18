@@ -48,35 +48,37 @@ def als_gls(
         F = np.pad(F, ((0, 0), (0, k - r)))
     D = np.maximum(np.var(R, axis=0), d_floor)
 
-    def A_mv(bvec):
-        """Matrix-free normal operator H(B) = X^T Σ^{-1} X · b + lam_B b"""
-        B_dir = unstack_B_vec(bvec, p_list)
-        M = XB_from_Blist(Xs, B_dir)                 # N x K
-        S = apply_siginv_to_matrix(M, F, D)          # N x K
-        out_blocks = []
-        for j, X in enumerate(Xs):
-            out_blocks.append(X.T @ S[:, [j]])
-        out = np.concatenate(out_blocks, axis=0).ravel()
-        return out + lam_B * bvec
-
-    # simple diagonal preconditioner: approx diag of H
-    def M_pre(v):
-        diag_entries = []
-        Dinv, Cf = woodbury_pieces(F, D)
-        # Rough diag: X_j^T (Σ^{-1} e_j e_j^T) X_j ≈ X_j^T (Dinv_j) X_j
-        for j, X in enumerate(Xs):
-            w = float(Dinv[j])
-            diag_entries.extend([w] * X.shape[1])
-        d = np.array(diag_entries) + lam_B
-        return v / np.maximum(d, 1e-8)
-
     # main ALS loop
     prev = None
     cg_info = None
     for _ in range(sweeps):
+        # Precompute Woodbury pieces once per sweep
+        Dinv, Cf = woodbury_pieces(F, D)
+
+        def A_mv(bvec):
+            """Matrix-free normal operator H(B) = X^T Σ^{-1} X · b + lam_B b"""
+            B_dir = unstack_B_vec(bvec, p_list)
+            M = XB_from_Blist(Xs, B_dir)                 # N x K
+            S = apply_siginv_to_matrix(M, F, D, Dinv=Dinv, Cf=Cf)  # N x K
+            out_blocks = []
+            for j, X in enumerate(Xs):
+                out_blocks.append(X.T @ S[:, [j]])
+            out = np.concatenate(out_blocks, axis=0).ravel()
+            return out + lam_B * bvec
+
+        # simple diagonal preconditioner: approx diag of H
+        def M_pre(v):
+            diag_entries = []
+            # Rough diag: X_j^T (Σ^{-1} e_j e_j^T) X_j ≈ X_j^T (Dinv_j) X_j
+            for j, X in enumerate(Xs):
+                w = float(Dinv[j])
+                diag_entries.extend([w] * X.shape[1])
+            d = np.array(diag_entries) + lam_B
+            return v / np.maximum(d, 1e-8)
+
         # β-step via CG
         rhs_blocks = []
-        S_y = apply_siginv_to_matrix(Y, F, D)
+        S_y = apply_siginv_to_matrix(Y, F, D, Dinv=Dinv, Cf=Cf)
         for j, X in enumerate(Xs):
             rhs_blocks.append(X.T @ S_y[:, [j]])
         b = np.concatenate(rhs_blocks, axis=0).ravel()
