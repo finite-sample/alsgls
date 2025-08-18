@@ -2,19 +2,20 @@ import numpy as np
 
 def woodbury_pieces(F: np.ndarray, D: np.ndarray):
     """
-    Return Dinv, Cf used in Woodbury:
+    Return Dinv, C_inv used in Woodbury:
     Σ = F F^T + diag(D)
-    Σ^{-1} = D^{-1} - D^{-1} F (I + F^T D^{-1} F)^{-1} F^T D^{-1}
+    Σ^{-1} = D^{-1} - D^{-1} F C_inv F^T D^{-1}
+    where C_inv = (I + F^T D^{-1} F)^{-1}
     """
     D = np.asarray(D)
     Dinv = 1.0 / np.clip(D, 1e-12, None)
     FtDinv = (F.T * Dinv)           # k x K (row-scale F.T by Dinv)
     M = FtDinv @ F                  # k x k == F^T D^{-1} F (reuse FtDinv to avoid re-scaling F)
     # solve small kxk: (I + M)^{-1}
-    Cf = np.linalg.solve(np.eye(F.shape[1]) + M, np.eye(F.shape[1]))
-    return Dinv, Cf
+    C_inv = np.linalg.solve(np.eye(F.shape[1]) + M, np.eye(F.shape[1]))
+    return Dinv, C_inv
 
-def apply_siginv_to_matrix(M: np.ndarray, F: np.ndarray, D: np.ndarray, *, Dinv=None, Cf=None):
+def apply_siginv_to_matrix(M: np.ndarray, F: np.ndarray, D: np.ndarray, *, Dinv=None, C_inv=None):
     """Right-multiply an N×K matrix ``M`` by ``Σ^{-1}`` using Woodbury.
 
     Parameters
@@ -28,16 +29,16 @@ def apply_siginv_to_matrix(M: np.ndarray, F: np.ndarray, D: np.ndarray, *, Dinv=
     Dinv : np.ndarray, optional
         Precomputed ``1/D`` vector.  If ``None`` (default), it will be
         computed internally via :func:`woodbury_pieces`.
-    Cf : np.ndarray, optional
-        Precomputed ``(I + F^T D^{-1} F)^{-1}``.  If ``None`` (default), it
-        will be computed internally via :func:`woodbury_pieces`.
+    C_inv : np.ndarray, optional
+        Precomputed inverse of ``(I + F^T D^{-1} F)``.  If ``None`` (default),
+        it will be computed internally via :func:`woodbury_pieces`.
     """
-    if Dinv is None or Cf is None:
-        Dinv, Cf = woodbury_pieces(F, D)
-    # M * Dinv - M*(Dinv F) Cf (F^T Dinv)
+    if Dinv is None or C_inv is None:
+        Dinv, C_inv = woodbury_pieces(F, D)
+    # M * Dinv - M*(Dinv F) C_inv (F^T Dinv)
     MDinv = M * Dinv[None, :]
     T1 = MDinv @ F              # N x k
-    T2 = T1 @ Cf                # N x k
+    T2 = T1 @ C_inv             # N x k
     T3 = T2 @ (F.T * Dinv)      # N x K
     return MDinv - T3
 
