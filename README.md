@@ -19,10 +19,12 @@ pip install -e .
 ### Usage
 
 ```python
-from alsgls import als_gls, simulate_sur
+from alsgls import als_gls, simulate_sur, nll_per_row, XB_from_Blist
 
 Xs_tr, Y_tr, Xs_te, Y_te = simulate_sur(N_tr=240, N_te=120, K=60, p=3, k=4)
 B, F, D, mem, _ = als_gls(Xs_tr, Y_tr, k=4)
+Yhat_te = XB_from_Blist(Xs_te, B)
+nll = nll_per_row(Y_te - Yhat_te, F, D)
 ```
 
 See `examples/compare_als_vs_em.py` for a complete ALS versus EM comparison.

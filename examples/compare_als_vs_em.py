@@ -12,7 +12,7 @@ def main():
     sec_a = time.time() - t0
     Yhat_te_a = XB_from_Blist(Xs_te, B_a)
     m_a = mse(Y_te, Yhat_te_a)
-    nll_a = nll_per_row(Y_te, Y_te - Yhat_te_a, F_a, D_a)
+    nll_a = nll_per_row(Y_te - Yhat_te_a, F_a, D_a)
 
     # EM
     t0 = time.time()
@@ -20,7 +20,7 @@ def main():
     sec_e = time.time() - t0
     Yhat_te_e = XB_from_Blist(Xs_te, B_e)
     m_e = mse(Y_te, Yhat_te_e)
-    nll_e = nll_per_row(Y_te, Y_te - Yhat_te_e, F_e, D_e)
+    nll_e = nll_per_row(Y_te - Yhat_te_e, F_e, D_e)
 
     print("=== SUR (ALS vs EM) ===")
     print(f"K={K}  p={p}  k={k}  N_tr={N_tr}  N_te={N_te}")

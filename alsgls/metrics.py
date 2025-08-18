@@ -4,10 +4,23 @@ from .ops import woodbury_pieces
 def mse(Y, Yhat):
     return float(np.mean((Y - Yhat) ** 2))
 
-def nll_per_row(Y, R, F, D):
-    """
-    Negative log-likelihood per row for residual matrix R (N x K):
-    0.5 * [ tr(R Σ^{-1} R^T) + logdet(Σ) + K log(2π) ]
+def nll_per_row(R, F, D):
+    """Negative log-likelihood per row for residual matrix ``R``.
+
+    Parameters
+    ----------
+    R : ndarray (N × K)
+        Residual matrix.
+    F : ndarray (K × k)
+        Factor loadings.
+    D : ndarray (K,)
+        Diagonal noise variances.
+
+    Returns
+    -------
+    float
+        ``0.5 * [tr(R Σ^{-1} R^T) + logdet(Σ) + K log(2π)]``
+        averaged over rows.
     """
     K = R.shape[1]
     Dinv, Cf = woodbury_pieces(F, D)
