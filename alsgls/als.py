@@ -90,9 +90,9 @@ def als_gls(
         R = Y - XB_from_Blist(Xs, B)
         # update U (scores) and F (loadings) by two ridge solves
         FtF = F.T @ F + lam_F * np.eye(F.shape[1])
-        U = R @ F @ np.linalg.inv(FtF)
+        U = np.linalg.solve(FtF, (R @ F).T).T
         UtU = U.T @ U + lam_F * np.eye(F.shape[1])
-        F = R.T @ U @ np.linalg.inv(UtU)
+        F = np.linalg.solve(UtU, U.T @ R).T
 
         # diagonal noise
         D = np.maximum(np.mean((R - U @ F.T) ** 2, axis=0), d_floor)

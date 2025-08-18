@@ -55,7 +55,7 @@ def em_gls(Xs, Y, k, lam_F=1e-3, lam_B=1e-3, iters=30, d_floor=1e-8):
         # β-step (dense normal equations using Σ^{-1})
         Dinv = 1.0 / np.clip(D, 1e-12, None)
         M = F.T @ (F * Dinv[:, None])             # k x k
-        Cf = np.linalg.inv(np.eye(k) + M)
+        Cf = np.linalg.solve(np.eye(k) + M, np.eye(k))
         # Build Σ^{-1} explicitly (KxK)
         Sigma_inv = np.diag(Dinv) - (F * Dinv[:, None]) @ Cf @ (F.T * Dinv[None, :])
 
@@ -88,9 +88,9 @@ def em_gls(Xs, Y, k, lam_F=1e-3, lam_B=1e-3, iters=30, d_floor=1e-8):
         R = Y - XB_from_Blist(Xs, B)
         # Update scores/loadings by two ridge solves
         FtF = F.T @ F + lam_F * np.eye(F.shape[1])
-        Uhat = R @ F @ np.linalg.inv(FtF)
+        Uhat = np.linalg.solve(FtF, (R @ F).T).T
         UtU = Uhat.T @ Uhat + lam_F * np.eye(F.shape[1])
-        F = R.T @ Uhat @ np.linalg.inv(UtU)
+        F = np.linalg.solve(UtU, Uhat.T @ R).T
         D = np.maximum(np.mean((R - Uhat @ F.T) ** 2, axis=0), d_floor)
 
     mem_mb_est = (K * K) * 8 / 1e6  # explicit Σ^{-1}
