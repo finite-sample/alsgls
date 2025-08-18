@@ -1,4 +1,3 @@
-# lowrank_gls/__init__.py
 """
 lowrank_gls: lightweight low-rank+diagonal GLS/SUR
 
@@ -39,24 +38,23 @@ Note: Data simulation and experiment scripts live in `experiments/` and are not
 imported here to keep the package lean and dependency-free.
 """
 
-from .core import (
-    # Solvers
+from .als_solver import (
     als_gls,
     em_gls,
-
-    # Calibration
+)
+from .calibration import (
     calibrate_alpha_gamma_s_cv3_conservative,
     finalize_on_dataset,
     apply_scale,
     inflate_corr_fixed_diag,
     apply_alpha,
-
-    # Diagnostics
+)
+from .diagnostics import (
     coverage_and_mahalanobis,
     whitening_matrix,
     top_eigvecs_sym,
-
-    # Likelihood & metrics
+)
+from .numerics import (
     penalized_nll,
     test_nll,
     predict_Y,
@@ -76,4 +74,3 @@ __all__ = [
 ]
 
 __version__ = "0.1.0"
-
