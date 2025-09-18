@@ -1,0 +1,21 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+type: software
+authors:
+  - family-names: "Sood"
+    given-names: "Gaurav"
+    email: "contact@gsood.com"
+title: "alsgls: Lightweight low-rank+diag GLS/SUR via ALS with EM baseline"
+version: 0.1.0
+date-released: 2024-01-01
+url: "https://github.com/finite-sample/alsgls"
+repository-code: "https://github.com/finite-sample/alsgls"
+license: MIT
+abstract: "A Python package implementing Alternating Least Squares (ALS) for low-rank+diagonal GLS estimation. The package provides memory-efficient solutions for Seemingly Unrelated Regressions (SUR) and other GLS problems by using low-rank factor models instead of dense covariance matrices."
+keywords:
+  - "alternating least squares"
+  - "generalized least squares"
+  - "seemingly unrelated regressions"
+  - "low-rank approximation"
+  - "econometrics"
+  - "statistics"
