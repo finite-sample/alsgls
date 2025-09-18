@@ -63,6 +63,3 @@ To show the magnitude, we ran a Monte‑Carlo experiment with N = 300 observat
 
 Statistically, the two estimators are indistinguishable (paired‑test p ≥ 0.14).  Computationally, ALS needs only a few megabytes whereas EM needs tens to hundreds.
 
-### 5  Choosing a solver in practice
-
-For small systems ($K < 50$), dense GLS or even separate OLS is fine.  Between 50 and 300 equations, a low‑rank **factor‑ALS** solver gives the same estimates at roughly one‑tenth the memory and runs happily on a GPU.  Once K enters the hundreds, any dense inverse becomes prohibitive; structured approaches such as factor‑ALS or sparse/banded $\hat{\Sigma}$ are mandatory.
