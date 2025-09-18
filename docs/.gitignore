@@ -1,0 +1,13 @@
+# Sphinx build outputs
+build/
+_build/
+
+# Auto-generated API docs
+source/api/modules.rst
+
+# Jupyter notebook checkpoints
+.ipynb_checkpoints/
+
+# OS files
+.DS_Store
+Thumbs.db
