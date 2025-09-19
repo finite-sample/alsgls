@@ -3,7 +3,7 @@
 [![PyPI version](https://img.shields.io/pypi/v/alsgls.svg)](https://pypi.org/project/alsgls/)
 [![PyPI Downloads](https://static.pepy.tech/badge/alsgls)](https://pepy.tech/projects/alsgls)
 [![Python](https://img.shields.io/badge/dynamic/toml?url=https://raw.githubusercontent.com/finite-sample/alsgls/main/pyproject.toml&query=$.project.requires-python&label=Python)](https://github.com/finite-sample/alsgls)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License](https://img.shields.io/badge/dynamic/toml?url=https://raw.githubusercontent.com/finite-sample/alsgls/main/pyproject.toml&query=$.project.license.text&label=License)](https://opensource.org/licenses/MIT)
 
 
 When a GLS problem involves hundreds of equations, the $K × K$ covariance matrix becomes the computational bottleneck.  A simple statistical remedy is to assume that most of the cross‑equation dependence can be captured by a *handful of latent factors* plus equation‑specific noise.  This “low‑rank + diagonal” assumption slashes the number of unknowns from roughly $K^²$ to about $K×k$ parameters, where **k** (the latent factor rank) is much smaller than $K$.  The model alone, however, does **not** guarantee speed: we still have to fit the parameters.
