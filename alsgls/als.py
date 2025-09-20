@@ -26,49 +26,43 @@ def als_gls(
     scale_floor: float = 1e-8,
 ):
     """
-    Alternating-least-squares GLS with a low-rank-plus-diagonal covariance model.
-    Uses Woodbury throughout to avoid materializing K×K dense matrices.
+    Alternating-least-squares GLS with low-rank-plus-diagonal covariance.
+    Uses Woodbury throughout; never materializes K×K dense Σ.
 
-    Additions:
+    Enhancements (correctness-first):
       - Cached Woodbury pieces per sweep.
-      - Stronger block-Jacobi preconditioner that incorporates diag(Σ^{-1}).
-      - PCA init of F scaled so F F^T ≈ R^T R / N.
-      - Optional MLE scale-correction of Σ each sweep (scale_correct=True).
+      - Block-Jacobi preconditioner using diag(Σ^{-1}).
+      - PCA init of F with F F^T ≈ R^T R / N.
+      - Guarded MLE scale-correction of Σ each sweep.
+      - β-step REVERT if it worsens NLL (keeps trace non-increasing).
+      - Backtracking/damped acceptance on (F, D) to accept only NLL-improving updates.
+      - Dual traces in `info`: nll_beta_trace (post-β), nll_trace/nll_sigma_trace (post-Σ).
 
     Parameters
     ----------
-    Xs : list of (N×p_j) arrays
-        Per-equation design matrices (length K).
-    Y : (N×K) array
-        Response matrix (columns are equations).
-    k : int
-        Target rank for the low-rank component (F has shape K×k).
-    lam_F : float
-        Ridge regularization for ALS updates of U and F.
-    lam_B : float
-        Ridge regularization for the β-step (per-equation coefficients).
-    sweeps : int
-        Maximum number of ALS sweeps.
-    d_floor : float
-        Floor for diagonal noise variances D to ensure SPD.
-    cg_maxit : int
-        Maximum iterations for CG in the β-step.
-    cg_tol : float
-        Relative tolerance for CG in the β-step.
-    scale_correct : bool
-        If True, apply an MLE scalar correction to Σ each sweep.
-    scale_floor : float
-        Minimum scalar used in the scale correction (guards degeneracy).
+    Xs : list of (N×p_j) arrays   (length K)
+    Y  : (N×K) array
+    k  : int                      rank of low-rank component (F: K×k)
+    lam_F : float                 ridge for U/F ALS updates
+    lam_B : float                 ridge for β-step (per-equation)
+    sweeps : int                  max ALS sweeps
+    d_floor : float               min variance for D to ensure SPD
+    cg_maxit : int                max CG iterations in β-step
+    cg_tol : float                CG relative tolerance
+    scale_correct : bool          if True, try guarded MLE scale fix on Σ each sweep
+    scale_floor : float           min scalar for scale correction
 
     Returns
     -------
-    B_list : list of (p_j×1) arrays
-    F : (K×k) array
-    D : (K,) array
-    mem_MB_est : float
-        Rough memory footprint estimate in MB for major state (F, D, U).
-    info : dict
-        Includes p_list, cg info, and an NLL trace per sweep.
+    B_list, F, D, mem_MB_est, info
+      info includes:
+        - p_list
+        - cg (last sweep)
+        - nll_trace          (post-Σ, non-increasing)
+        - nll_sigma_trace    (alias of nll_trace)
+        - nll_beta_trace     (post-β baseline per sweep)
+        - accept_t           (list of accepted backtracking t)
+        - scale_used         (list of accepted scale factors, 1.0 if not applied)
     """
     # ----------------------------
     # Input validation
@@ -93,7 +87,7 @@ def als_gls(
     # ----------------------------
     # Initialization
     # ----------------------------
-    # Start with per-equation ridge/OLS for B
+    # Per-equation ridge/OLS for B
     B = []
     for j, X in enumerate(Xs):
         p = X.shape[1]
@@ -105,8 +99,6 @@ def als_gls(
     R = Y - XB_from_Blist(Xs, B)
 
     # PCA-like init for F with scale matched to column covariance: R^T R / N
-    # SVD: R = U diag(s) V^T, so R^T R / N = V diag(s^2 / N) V^T.
-    # Set F = V diag(s / sqrt(N)) to get F F^T ≈ R^T R / N.
     if N > 0:
         _, s, Vt = np.linalg.svd(R, full_matrices=False)
         if s.size == 0:
@@ -124,23 +116,28 @@ def als_gls(
     D = np.maximum(np.var(R, axis=0), d_floor)
 
     # ----------------------------
+    # Traces & baseline
+    # ----------------------------
+    nll_trace = []
+    nll_beta_trace = []
+    accept_t_trace = []
+    scale_used_trace = []
+
+    # Starting NLL (explicit baseline before any sweep)
+    nll_prev = float(nll_per_row(R, F, D))
+    nll_trace.append(nll_prev)
+
+    # ----------------------------
     # Main ALS loop
     # ----------------------------
-    prev_nll = None
-    nll_trace = []
     cg_info = None
 
     for _ in range(sweeps):
         # Cache Woodbury pieces once per sweep
         Dinv, C_chol = woodbury_chol(F, D)
 
-        # Build a better diagonal preconditioner that reflects Σ^{-1} diagonal
-        # Σ^{-1} = D^{-1} - D^{-1} F (I + F^T D^{-1} F)^{-1} F^T D^{-1}
-        # diag(Σ^{-1})_j = Dinv_j - Dinv_j^2 * f_j^T C^{-1} f_j
+        # diag(Σ^{-1}) for preconditioning: Σ^{-1} = D^{-1} - D^{-1}F C^{-1} F^T D^{-1}
         diag_sinv = siginv_diag(F, Dinv, C_chol)  # (K,)
-
-        # Precompute the diagonal of the CG operator for a block-Jacobi preconditioner
-        # Each block j contributes diag(X_j^T Σ^{-1} X_j) ≈ diag_sinv[j] * diag(X_j^T X_j)
         block_diags = [diag_sinv[j] * np.sum(X * X, axis=0) for j, X in enumerate(Xs)]
         Mpre_diag = np.concatenate(block_diags, axis=0) + lam_B
 
@@ -156,7 +153,9 @@ def als_gls(
             out = np.concatenate(out_blocks, axis=0).ravel()
             return out + lam_B * bvec
 
-        # β-step via CG
+        # --- β-step via CG (keep a copy to allow revert if NLL worsens)
+        B_prev = [b.copy() for b in B]
+
         S_y = apply_siginv_to_matrix(Y, F, D, Dinv=Dinv, C_chol=C_chol)
         rhs_blocks = [Xs[j].T @ S_y[:, [j]] for j in range(K)]
         b = np.concatenate(rhs_blocks, axis=0).ravel()
@@ -169,41 +168,93 @@ def als_gls(
         # Residuals with new B
         R = Y - XB_from_Blist(Xs, B)
 
-        # Two ridge LS updates for U (scores) and F (loadings)
+        # Baseline NLL for this sweep *after* β-step (the per-sweep baseline)
+        base_nll = float(nll_per_row(R, F, D))
+        nll_beta_trace.append(base_nll)
+
+        # If β worsened NLL, revert to previous B (ensures non-increase vs prior Σ)
+        if base_nll > nll_prev + 1e-12:
+            B = B_prev
+            R = Y - XB_from_Blist(Xs, B)
+            base_nll = nll_prev  # true baseline for this sweep
+
+        # --- Propose U,F,D updates (unconstrained proposal)
         FtF = F.T @ F + lam_F * np.eye(F.shape[1])
-        U = np.linalg.solve(FtF, (R @ F).T).T  # N × k
-        UtU = U.T @ U + lam_F * np.eye(F.shape[1])
-        F = np.linalg.solve(UtU, U.T @ R).T     # K × k
+        U_prop = np.linalg.solve(FtF, (R @ F).T).T  # N × k
+        UtU = U_prop.T @ U_prop + lam_F * np.eye(F.shape[1])
+        F_prop = np.linalg.solve(UtU, U_prop.T @ R).T  # K × k
+        D_prop = np.maximum(np.mean((R - U_prop @ F_prop.T) ** 2, axis=0), d_floor)
 
-        # Update diagonal noise with floor
-        D = np.maximum(np.mean((R - U @ F.T) ** 2, axis=0), d_floor)
+        # Guarded scale correction helper (applied to a candidate F,D)
+        def try_with_scale(F_try, D_try):
+            """Return (F_out, D_out, nll_out, scale_used)."""
+            nll0 = float(nll_per_row(R, F_try, D_try))
+            if not scale_correct:
+                return F_try, D_try, nll0, 1.0
 
-        # --- MLE scale correction for Σ = c * (F F^T + diag D)
-        # NLL(c) = 0.5 * [ (1/c) * (1/N) tr(R Σ^{-1} R^T) + K log c ] + const
-        # c* = (1/NK) tr(R Σ^{-1} R^T) with Σ built from current (F, D).
-        if scale_correct:
-            Dinv_sc, C_chol_sc = woodbury_chol(F, D)
-            RSinv_sc = apply_siginv_to_matrix(R, F, D, Dinv=Dinv_sc, C_chol=C_chol_sc)
-            quad_over_N = float(np.sum(RSinv_sc * R)) / N
+            # MLE scalar c* for Σ = c * (F_try F_try^T + diag D_try)
+            Dinv_s, C_chol_s = woodbury_chol(F_try, D_try)
+            RSinv_s = apply_siginv_to_matrix(R, F_try, D_try, Dinv=Dinv_s, C_chol=C_chol_s)
+            quad_over_N = float(np.sum(RSinv_s * R)) / N
             c_star = max(quad_over_N / K, scale_floor)
-            # Rescale F and D to apply Σ ← c* Σ
-            F *= np.sqrt(c_star)
-            D *= c_star
 
-        # Track true NLL (cheap via Woodbury + det-lemma)
-        cur_nll = float(nll_per_row(R, F, D))
-        nll_trace.append(cur_nll)
+            sqrt_c = np.sqrt(c_star)
+            F_sc = F_try * sqrt_c
+            D_sc = D_try * c_star
+            nll_sc = float(nll_per_row(R, F_sc, D_sc))
 
-        if np.isfinite(cur_nll):
-            if prev_nll is not None:
-                rel = (prev_nll - cur_nll) / max(1.0, abs(prev_nll))
-                if rel < 1e-6:
-                    break
-            prev_nll = cur_nll
+            if nll_sc <= nll0 + 1e-12:
+                return F_sc, D_sc, nll_sc, c_star
+            else:
+                return F_try, D_try, nll0, 1.0
+
+        # --- Backtracking/damped acceptance on (F, D)
+        F_old, D_old = F, D
+        dF = F_prop - F_old
+        dD = D_prop - D_old
+
+        best_nll = base_nll
+        best_F, best_D = F_old, D_old
+        accepted_t = 0.0
+        used_scale = 1.0
+
+        for t in (1.0, 0.5, 0.25, 0.125, 0.0625):
+            F_try = F_old + t * dF
+            D_try = np.maximum(D_old + t * dD, d_floor)
+            F_acc, D_acc, nll_acc, sc_used = try_with_scale(F_try, D_try)
+            # Accept only if we beat the per-sweep baseline
+            if nll_acc < best_nll - 1e-12:
+                best_nll = nll_acc
+                best_F, best_D = F_acc, D_acc
+                accepted_t = t
+                used_scale = sc_used
+                break  # first improving step is fine (monotone)
+
+        # Accept (or keep old F,D if no improvement)
+        F, D = best_F, best_D
+        nll_curr = best_nll
+        accept_t_trace.append(accepted_t)
+        scale_used_trace.append(float(used_scale))
+
+        # Append post-Σ NLL (non-increasing by construction)
+        nll_trace.append(nll_curr)
+
+        # Convergence: stop if relative improvement w.r.t previous post-Σ NLL is tiny
+        rel_impr = (nll_prev - nll_curr) / max(1.0, abs(nll_prev))
+        nll_prev = nll_curr
+        if rel_impr < 1e-6:
+            break
 
     # Memory estimate: F (K×k) + D (K) + U (N×k) doubles
     mem_mb_est = (K * F.shape[1] + K + N * F.shape[1]) * 8 / 1e6
 
-    info = {"p_list": p_list, "cg": cg_info, "nll_trace": nll_trace}
-
+    info = {
+        "p_list": p_list,
+        "cg": cg_info,
+        "nll_trace": nll_trace,           # post-Σ
+        "nll_sigma_trace": nll_trace,     # alias for clarity
+        "nll_beta_trace": nll_beta_trace, # post-β (per-sweep baseline)
+        "accept_t": accept_t_trace,       # accepted t (0.0 means kept previous F,D)
+        "scale_used": scale_used_trace,   # accepted c* (1.0 means no scale applied)
+    }
     return B, F, D, mem_mb_est, info
