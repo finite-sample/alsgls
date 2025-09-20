@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "alsgls"
-version = "0.1.0"
+version = "0.2.0"
 description = "Lightweight low-rank+diag GLS/SUR via ALS with EM baseline"
 readme = "README.md"
 requires-python = ">=3.10"
