@@ -21,10 +21,19 @@ def als_gls(
     d_floor: float = 1e-8,
     cg_maxit: int = 800,
     cg_tol: float = 3e-7,
+    *,
+    scale_correct: bool = True,
+    scale_floor: float = 1e-8,
 ):
     """
     Alternating-least-squares GLS with a low-rank-plus-diagonal covariance model.
     Uses Woodbury throughout to avoid materializing K×K dense matrices.
+
+    Additions:
+      - Cached Woodbury pieces per sweep.
+      - Stronger block-Jacobi preconditioner that incorporates diag(Σ^{-1}).
+      - PCA init of F scaled so F F^T ≈ R^T R / N.
+      - Optional MLE scale-correction of Σ each sweep (scale_correct=True).
 
     Parameters
     ----------
@@ -46,6 +55,10 @@ def als_gls(
         Maximum iterations for CG in the β-step.
     cg_tol : float
         Relative tolerance for CG in the β-step.
+    scale_correct : bool
+        If True, apply an MLE scalar correction to Σ each sweep.
+    scale_floor : float
+        Minimum scalar used in the scale correction (guards degeneracy).
 
     Returns
     -------
@@ -97,7 +110,6 @@ def als_gls(
     if N > 0:
         _, s, Vt = np.linalg.svd(R, full_matrices=False)
         if s.size == 0:
-            r = 1
             F = np.zeros((K, k))
         else:
             s_thresh = max(float(s[0]) * 1e-10, 1e-8)
@@ -166,6 +178,18 @@ def als_gls(
         # Update diagonal noise with floor
         D = np.maximum(np.mean((R - U @ F.T) ** 2, axis=0), d_floor)
 
+        # --- MLE scale correction for Σ = c * (F F^T + diag D)
+        # NLL(c) = 0.5 * [ (1/c) * (1/N) tr(R Σ^{-1} R^T) + K log c ] + const
+        # c* = (1/NK) tr(R Σ^{-1} R^T) with Σ built from current (F, D).
+        if scale_correct:
+            Dinv_sc, C_chol_sc = woodbury_chol(F, D)
+            RSinv_sc = apply_siginv_to_matrix(R, F, D, Dinv=Dinv_sc, C_chol=C_chol_sc)
+            quad_over_N = float(np.sum(RSinv_sc * R)) / N
+            c_star = max(quad_over_N / K, scale_floor)
+            # Rescale F and D to apply Σ ← c* Σ
+            F *= np.sqrt(c_star)
+            D *= c_star
+
         # Track true NLL (cheap via Woodbury + det-lemma)
         cur_nll = float(nll_per_row(R, F, D))
         nll_trace.append(cur_nll)
@@ -183,4 +207,3 @@ def als_gls(
     info = {"p_list": p_list, "cg": cg_info, "nll_trace": nll_trace}
 
     return B, F, D, mem_mb_est, info
-
