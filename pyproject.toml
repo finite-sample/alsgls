@@ -7,7 +7,7 @@ name = "alsgls"
 version = "0.1.0"
 description = "Lightweight low-rank+diag GLS/SUR via ALS with EM baseline"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 authors = [{ name = "Gaurav Sood", email = "contact@gsood.com" }]
 license = { text = "MIT" }
 urls = { "Homepage" = "https://github.com/finite-sample/alsgls" }
