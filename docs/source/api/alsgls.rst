@@ -33,6 +33,14 @@ alsgls.ops module
    :undoc-members:
    :show-inheritance:
 
+alsgls.api module
+-----------------
+
+.. automodule:: alsgls.api
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 alsgls.sim module
 -----------------
 

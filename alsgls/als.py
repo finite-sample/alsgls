@@ -24,6 +24,7 @@ def als_gls(
     *,
     scale_correct: bool = True,
     scale_floor: float = 1e-8,
+    rel_tol: float = 1e-6,
 ):
     """
     Alternating-least-squares GLS with low-rank-plus-diagonal covariance.
@@ -51,6 +52,7 @@ def als_gls(
     cg_tol : float                CG relative tolerance
     scale_correct : bool          if True, try guarded MLE scale fix on Σ each sweep
     scale_floor : float           min scalar for scale correction
+    rel_tol : float               relative NLL improvement threshold for early stopping
 
     Returns
     -------
@@ -81,6 +83,8 @@ def als_gls(
         raise ValueError(f"k must be between 1 and min(K={K}, N={N})")
     if lam_F < 0 or lam_B < 0:
         raise ValueError("Regularization parameters must be non-negative")
+    if rel_tol < 0:
+        raise ValueError("rel_tol must be non-negative")
 
     p_list = [X.shape[1] for X in Xs]
 
@@ -242,7 +246,7 @@ def als_gls(
         # Convergence: stop if relative improvement w.r.t previous post-Σ NLL is tiny
         rel_impr = (nll_prev - nll_curr) / max(1.0, abs(nll_prev))
         nll_prev = nll_curr
-        if rel_impr < 1e-6:
+        if rel_impr < rel_tol:
             break
 
     # Memory estimate: F (K×k) + D (K) + U (N×k) doubles
