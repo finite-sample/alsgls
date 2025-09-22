@@ -25,15 +25,26 @@ pip install -e .
 ### Usage
 
 ```python
-from alsgls import als_gls, simulate_sur, nll_per_row, XB_from_Blist
+from alsgls import ALSGLS, ALSGLSSystem, simulate_sur
 
 Xs_tr, Y_tr, Xs_te, Y_te = simulate_sur(N_tr=240, N_te=120, K=60, p=3, k=4)
-B, F, D, mem, _ = als_gls(Xs_tr, Y_tr, k=4)
-Yhat_te = XB_from_Blist(Xs_te, B)
-nll = nll_per_row(Y_te - Yhat_te, F, D)
+
+# Scikit-learn style estimator
+est = ALSGLS(rank="auto", max_sweeps=12)
+est.fit(Xs_tr, Y_tr)
+test_score = est.score(Xs_te, Y_te)  # negative test NLL per observation
+
+# Statsmodels-style system interface
+system = {f"eq{j}": (Y_tr[:, j], Xs_tr[j]) for j in range(Y_tr.shape[1])}
+sys_model = ALSGLSSystem(system, rank="auto")
+sys_results = sys_model.fit()
+params = sys_results.params_as_series()  # pandas optional
 ```
 
-See `examples/compare_als_vs_em.py` for a complete ALS versus EM comparison.
+See `examples/compare_als_vs_em.py` for a complete ALS versus EM comparison. The
+`benchmarks/compare_sur.py` script contrasts ALS-GLS with `statsmodels` and
+`linearmodels` SUR implementations on matched simulation grids while recording
+peak memory (via Memray, Fil, or the POSIX RSS high-water mark).
 
 ### Documentation and notebooks
 
@@ -62,4 +73,25 @@ To show the magnitude, we ran a Monte‑Carlo experiment with N = 300 observat
 | 120 |   0.020   |    0.020   |     0.115  |      0.004  |         29×  |
 
 Statistically, the two estimators are indistinguishable (paired‑test p ≥ 0.14).  Computationally, ALS needs only a few megabytes whereas EM needs tens to hundreds.
+
+### Defaults, tuning knobs, and failure modes
+
+- **Rank (`k`)** – By default the high-level APIs pick `min(8, ceil(K / 10))`, a
+  conservative fraction of the number of equations. Increase `rank` if the
+  cross-equation correlation matrix is slow to decay; decrease it when the
+  diagonal dominates.
+- **ALS ridge terms (`lam_F`, `lam_B`)** – Defaults to `1e-3` for both the
+  latent-factor and regression updates; raise them slightly (e.g. `1e-2`) if CG
+  struggles to converge or the NLL trace plateaus early.
+- **Noise floor (`d_floor`)** – Keeps the diagonal component positive; the
+  default `1e-8` protects against breakdowns when an equation is nearly
+  deterministic. Increase it in highly ill-conditioned settings.
+- **Stopping criteria** – ALS stops when the relative drop in NLL per sweep is
+  below `1e-6` (configurable via `rel_tol`) or after `max_sweeps`. Inspect
+  `info["nll_trace"]` to diagnose stagnation.
+- **Possible failures** – Large condition numbers or nearly-collinear regressors
+  can make the β-step CG solve slow; adjust `cg_tol`/`cg_maxit`, add stronger
+  ridge, or re-scale predictors. If `info["accept_t"]` stays at zero and the
+  NLL does not improve, the factor rank may be too large relative to the sample
+  size.
 

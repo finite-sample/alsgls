@@ -62,3 +62,20 @@ def test_nll_logdet_via_cholesky_consistency():
     val_dense = 0.5 * (quad_dense / N + logdet_dense + K * np.log(2.0 * np.pi))
 
     assert np.allclose(val, val_dense, rtol=RTOL, atol=ATOL)
+
+
+def test_determinant_lemma_matches_dense():
+    rng = np.random.default_rng(19)
+    K, k = 7, 3
+    F = rng.standard_normal((K, k))
+    D = rand_spd_diag(K, rng)
+
+    S = F @ F.T + np.diag(D)
+    logdet_dense = float(np.linalg.slogdet(S)[1])
+
+    Dinv, C_chol = woodbury_chol(F, D)
+    logdet_diag = np.sum(np.log(np.clip(D, 1e-30, None)))
+    logdet_small = 2.0 * np.sum(np.log(np.diag(C_chol)))
+    logdet_lemma = logdet_diag + logdet_small
+
+    assert np.allclose(logdet_dense, logdet_lemma, rtol=RTOL, atol=ATOL)
