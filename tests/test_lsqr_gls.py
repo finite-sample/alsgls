@@ -6,12 +6,17 @@ import pytest
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
-from alsgls.lsqr_gls import (
-    GLSLinearOperator,
-    WoodburyWeight,
-    make_block_design_ops,
-    solve_gls_weighted,
-)
+pytest_plugins = []
+
+try:
+    from alsgls.lsqr_gls import (
+        GLSLinearOperator,
+        WoodburyWeight,
+        make_block_design_ops,
+        solve_gls_weighted,
+    )
+except ImportError:
+    pytest.skip("scipy is required for lsqr_gls tests", allow_module_level=True)
 
 
 @pytest.mark.parametrize("k", [0, 3])
