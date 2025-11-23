@@ -1,4 +1,5 @@
 import numpy as np
+
 from alsgls.als import als_gls
 from alsgls.metrics import nll_per_row
 

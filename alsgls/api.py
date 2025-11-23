@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
+from typing import Any
 
 import numpy as np
 
@@ -36,7 +37,7 @@ def _asarray_2d(x: Any, *, dtype: np.dtype = np.float64) -> np.ndarray:
     return arr
 
 
-def _column_names(obj: Any, size: int) -> List[str]:
+def _column_names(obj: Any, size: int) -> list[str]:
     if hasattr(obj, "columns"):
         return list(obj.columns)
     if hasattr(obj, "dtype") and getattr(obj.dtype, "names", None):
@@ -54,7 +55,7 @@ class ALSGLS:
     def __init__(
         self,
         *,
-        rank: Optional[int | str] = "auto",
+        rank: int | str | None = "auto",
         lam_F: float = 1e-3,
         lam_B: float = 1e-3,
         max_sweeps: int = 12,
@@ -79,7 +80,7 @@ class ALSGLS:
     # ------------------------------------------------------------------
     # Scikit-learn estimator protocol
     # ------------------------------------------------------------------
-    def get_params(self, deep: bool = True) -> Dict[str, Any]:  # noqa: D401 - sklearn API
+    def get_params(self, deep: bool = True) -> dict[str, Any]:  # noqa: D401 - sklearn API
         return {
             "rank": self.rank,
             "lam_F": self.lam_F,
@@ -93,7 +94,7 @@ class ALSGLS:
             "scale_floor": self.scale_floor,
         }
 
-    def set_params(self, **params: Any) -> "ALSGLS":  # noqa: D401 - sklearn API
+    def set_params(self, **params: Any) -> ALSGLS:  # noqa: D401 - sklearn API
         for key, value in params.items():
             if not hasattr(self, key):
                 raise ValueError(f"Unknown parameter {key!r}")
@@ -103,7 +104,7 @@ class ALSGLS:
     # ------------------------------------------------------------------
     # Fitting / inference
     # ------------------------------------------------------------------
-    def fit(self, Xs: Sequence[Any], Y: Any) -> "ALSGLS":
+    def fit(self, Xs: Sequence[Any], Y: Any) -> ALSGLS:
         X_list = [_asarray_2d(X) for X in Xs]
         Y_arr = _asarray_2d(Y)
 
@@ -160,7 +161,7 @@ class ALSGLS:
         X_list = [_asarray_2d(X) for X in Xs]
         if len(X_list) != len(self.B_list_):
             raise ValueError("Number of design matrices does not match fitted model")
-        for j, (X, B) in enumerate(zip(X_list, self.B_list_)):
+        for j, (X, B) in enumerate(zip(X_list, self.B_list_, strict=False)):
             if X.shape[1] != B.shape[0]:
                 raise ValueError(f"X[{j}] has {X.shape[1]} columns but expected {B.shape[0]}")
         return XB_from_Blist(X_list, self.B_list_)
@@ -182,7 +183,7 @@ class _SystemEquation:
     name: str
     y: np.ndarray
     X: np.ndarray
-    column_names: List[str]
+    column_names: list[str]
 
 
 class ALSGLSSystem:
@@ -190,9 +191,9 @@ class ALSGLSSystem:
 
     def __init__(
         self,
-        system: Mapping[Any, Tuple[Any, Any]] | Sequence[Tuple[Any, Tuple[Any, Any]]],
+        system: Mapping[Any, tuple[Any, Any]] | Sequence[tuple[Any, tuple[Any, Any]]],
         *,
-        rank: Optional[int | str] = "auto",
+        rank: int | str | None = "auto",
         lam_F: float = 1e-3,
         lam_B: float = 1e-3,
         max_sweeps: int = 12,
@@ -210,8 +211,8 @@ class ALSGLSSystem:
         if len(items) == 0:
             raise ValueError("system must contain at least one equation")
 
-        equations: List[_SystemEquation] = []
-        n_obs: Optional[int] = None
+        equations: list[_SystemEquation] = []
+        n_obs: int | None = None
 
         for idx, (name, (y, X)) in enumerate(items):
             y_arr = _asarray_2d(y)
@@ -254,12 +255,12 @@ class ALSGLSSystem:
     def keqs(self) -> int:
         return len(self._equations)
 
-    def as_arrays(self) -> Tuple[List[np.ndarray], np.ndarray]:
+    def as_arrays(self) -> tuple[list[np.ndarray], np.ndarray]:
         Xs = [eq.X for eq in self._equations]
         Y = np.column_stack([eq.y for eq in self._equations])
         return Xs, Y
 
-    def fit(self) -> "ALSGLSSystemResults":
+    def fit(self) -> ALSGLSSystemResults:
         estimator = ALSGLS(
             rank=self.rank,
             lam_F=self.lam_F,
@@ -316,7 +317,7 @@ class ALSGLSSystemResults:
         mi = pd.MultiIndex.from_tuples(self.param_labels, names=["equation", "variable"])
         return pd.Series(self.params, index=mi)
 
-    def predict(self, exog: Optional[Mapping[Any, Any] | Sequence[Any]] = None) -> np.ndarray:
+    def predict(self, exog: Mapping[Any, Any] | Sequence[Any] | None = None) -> np.ndarray:
         if exog is None:
             Xs = [eq.X for eq in self.model._equations]
         else:
@@ -327,14 +328,14 @@ class ALSGLSSystemResults:
             if len(items) != len(self.model._equations):
                 raise ValueError("Expected design matrices for all equations")
             Xs = []
-            for item, eq in zip(items, self.model._equations):
+            for item, eq in zip(items, self.model._equations, strict=False):
                 arr = _asarray_2d(item)
                 if arr.shape[1] != eq.X.shape[1]:
                     raise ValueError("Design matrix has incompatible number of columns")
                 Xs.append(arr)
         return XB_from_Blist(Xs, self.B_list)
 
-    def summary_dict(self) -> Dict[str, Any]:
+    def summary_dict(self) -> dict[str, Any]:
         return {
             "rank": self.rank,
             "nobs": self.model.nobs,

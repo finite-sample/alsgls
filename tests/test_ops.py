@@ -1,17 +1,18 @@
-import numpy as np
-import pytest
 import sys
 from pathlib import Path
+
+import numpy as np
+import pytest
 
 # Ensure package root is on sys.path
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 from alsgls.ops import (
-    woodbury_pieces,
     apply_siginv_to_matrix,
+    cg_solve,
     stack_B_list,
     unstack_B_vec,
-    cg_solve,
+    woodbury_pieces,
 )
 
 
@@ -52,7 +53,7 @@ def test_stack_and_unstack_B_list():
     recovered = unstack_B_vec(b_vec, p_list)
 
     # Each recovered block should match the original exactly
-    for orig, rec in zip(B_list, recovered):
+    for orig, rec in zip(B_list, recovered, strict=False):
         assert np.allclose(orig, rec)
 
 

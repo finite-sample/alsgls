@@ -17,14 +17,14 @@ Woodbury core.
 """
 from __future__ import annotations
 
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import Callable, Sequence
 
 import numpy as np
 from numpy.linalg import svd
 
 try:  # pragma: no cover - import guard exercised in tests
-    from scipy.sparse.linalg import LinearOperator, lsqr, lsmr
+    from scipy.sparse.linalg import LinearOperator, lsmr, lsqr
 except Exception as exc:  # pragma: no cover - exercised when SciPy missing
     raise ImportError("The lsqr_gls module requires scipy to be installed.") from exc
 

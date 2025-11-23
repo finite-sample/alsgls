@@ -1,8 +1,8 @@
 import numpy as np
 import numpy.linalg as npl
 
-from alsgls.ops import apply_siginv_to_matrix, woodbury_chol, siginv_diag
 from alsgls.metrics import nll_per_row
+from alsgls.ops import apply_siginv_to_matrix, siginv_diag, woodbury_chol
 
 RTOL = 5e-8
 ATOL = 5e-9

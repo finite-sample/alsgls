@@ -43,22 +43,22 @@ from .als_solver import (
     em_gls,
 )
 from .calibration import (
+    apply_alpha,
+    apply_scale,
     calibrate_alpha_gamma_s_cv3_conservative,
     finalize_on_dataset,
-    apply_scale,
     inflate_corr_fixed_diag,
-    apply_alpha,
 )
 from .diagnostics import (
     coverage_and_mahalanobis,
-    whitening_matrix,
     top_eigvecs_sym,
+    whitening_matrix,
 )
 from .numerics import (
-    penalized_nll,
-    test_nll,
-    predict_Y,
     mse,
+    penalized_nll,
+    predict_Y,
+    test_nll,
 )
 
 __all__ = [

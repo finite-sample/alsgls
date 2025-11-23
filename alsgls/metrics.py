@@ -1,5 +1,6 @@
 import numpy as np
-from .ops import woodbury_chol, apply_siginv_to_matrix
+
+from .ops import apply_siginv_to_matrix, woodbury_chol
 
 
 def mse(Y, Yhat):

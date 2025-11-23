@@ -8,9 +8,9 @@ import json
 import math
 import tempfile
 import time
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, List, Optional, Tuple
 
 import numpy as np
 
@@ -127,20 +127,20 @@ class BenchmarkResult:
     p: int
     k: int
     method: str
-    beta_rmse: Optional[float]
-    test_nll: Optional[float]
-    peak_memory: Optional[float]
+    beta_rmse: float | None
+    test_nll: float | None
+    peak_memory: float | None
     wall_time: float
     status: str
 
 
 def run_benchmark(
-    grid: Iterable[Tuple[int, int, int, int]],
+    grid: Iterable[tuple[int, int, int, int]],
     *,
     seed: int = 0,
     memory_backend: str = "resource",
-) -> List[BenchmarkResult]:
-    results: List[BenchmarkResult] = []
+) -> list[BenchmarkResult]:
+    results: list[BenchmarkResult] = []
 
     for K, N, p, k in grid:
         X_tr, Y_tr, X_te, Y_te, B_true, _, _ = _simulate_sur(
@@ -227,7 +227,7 @@ def parse_grid(K_vals, N_vals, p_vals, k_vals):
     return list(itertools.product(K_vals, N_vals, p_vals, k_vals))
 
 
-def main(argv: Optional[Iterable[str]] = None) -> None:
+def main(argv: Iterable[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--K", nargs="*", type=int, default=[20, 40])
     parser.add_argument("--N", nargs="*", type=int, default=[200])

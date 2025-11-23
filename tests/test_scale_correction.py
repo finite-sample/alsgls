@@ -1,6 +1,7 @@
 import numpy as np
-from alsgls.ops import woodbury_chol, apply_siginv_to_matrix
+
 from alsgls.metrics import nll_per_row
+from alsgls.ops import apply_siginv_to_matrix, woodbury_chol
 
 RTOL = 1e-9
 ATOL = 1e-10

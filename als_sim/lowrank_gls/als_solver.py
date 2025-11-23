@@ -1,23 +1,24 @@
 import time
+
 import numpy as np
 from scipy.sparse.linalg import LinearOperator, cg
 
 from .numerics import (
-    safe_solve,
-    wpca_init,
     cf_matrix,
-    safe_inv,
-    siginv_apply_to_matrix,
     pack_list_to_vec,
-    unpack_vec_to_list,
-    predict_Y,
     penalized_nll,
+    predict_Y,
+    safe_inv,
+    safe_solve,
+    siginv_apply_to_matrix,
+    unpack_vec_to_list,
+    wpca_init,
 )
 
 
 def build_diag_precond(Xs, F, D, Cf_i, lam_B):
     K = len(Xs)
-    p_list = [X.shape[1] for X in Xs]
+    [X.shape[1] for X in Xs]
     Dinv = 1.0 / D
     diag_term = np.sum(F * (F @ Cf_i), axis=1)
     sigma_inv_diag = Dinv - (Dinv ** 2) * diag_term

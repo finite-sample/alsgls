@@ -1,5 +1,7 @@
 import numpy as np
+
 from .ops import XB_from_Blist
+
 
 def em_gls(Xs, Y, k, lam_F=1e-3, lam_B=1e-3, iters=30, d_floor=1e-8):
     """
@@ -22,7 +24,7 @@ def em_gls(Xs, Y, k, lam_F=1e-3, lam_B=1e-3, iters=30, d_floor=1e-8):
         raise ValueError(f"k must be between 1 and min(K={K}, N={N})")
     if lam_F < 0 or lam_B < 0:
         raise ValueError("Regularization parameters must be non-negative")
-    
+
     p_list = [X.shape[1] for X in Xs]
 
     # init B (OLS per equation)

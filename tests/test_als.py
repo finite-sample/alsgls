@@ -7,9 +7,9 @@ import numpy as np
 # ``tests`` directory.
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
-from alsgls.sim import simulate_gls
 from alsgls.als import als_gls
 from alsgls.ops import XB_from_Blist
+from alsgls.sim import simulate_gls
 
 
 def test_als_shapes_and_mse_improvement():

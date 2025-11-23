@@ -23,7 +23,7 @@ def test_sklearn_api_matches_function():
     fitted = model.fit(Xs, Y)
 
     assert fitted is model
-    for b_direct, b_model in zip(direct[0], model.B_list_):
+    for b_direct, b_model in zip(direct[0], model.B_list_, strict=False):
         assert np.allclose(b_direct, b_model, atol=1e-8)
     assert np.allclose(direct[1], model.F_, atol=1e-8)
     assert np.allclose(direct[2], model.D_, atol=1e-8)

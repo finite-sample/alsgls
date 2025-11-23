@@ -1,4 +1,5 @@
 import numpy as np
+
 from alsgls.als import als_gls
 
 ABS_FUZZ = 3e-2    # allow tiny non-monotone jiggles per sweep

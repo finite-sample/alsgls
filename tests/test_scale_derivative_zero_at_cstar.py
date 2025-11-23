@@ -1,13 +1,14 @@
 import numpy as np
 
+
 def test_scale_derivative_zero_at_cstar():
     rng = np.random.default_rng(1)
     N,K,k = 100, 15, 3
     R = rng.standard_normal((N,K))
     F = rng.standard_normal((K,k)) / np.sqrt(K)
     D = 0.3 + rng.random(K)
-    from alsgls.ops import woodbury_chol, apply_siginv_to_matrix
     from alsgls.metrics import nll_per_row
+    from alsgls.ops import apply_siginv_to_matrix, woodbury_chol
     Dinv, C_chol = woodbury_chol(F,D)
     RSinv = apply_siginv_to_matrix(R,F,D,Dinv=Dinv,C_chol=C_chol)
     quad_over_N = float(np.sum(RSinv*R))/N

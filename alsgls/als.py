@@ -1,14 +1,15 @@
 import numpy as np
+
+from .metrics import nll_per_row
 from .ops import (
+    XB_from_Blist,
     apply_siginv_to_matrix,
+    cg_solve,
+    siginv_diag,
     stack_B_list,
     unstack_B_vec,
-    XB_from_Blist,
-    cg_solve,
     woodbury_chol,
-    siginv_diag,
 )
-from .metrics import nll_per_row
 
 
 def als_gls(

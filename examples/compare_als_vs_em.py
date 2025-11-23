@@ -1,6 +1,7 @@
 import time
-import numpy as np
-from alsgls import als_gls, em_gls, simulate_sur, mse, nll_per_row, XB_from_Blist
+
+from alsgls import XB_from_Blist, als_gls, em_gls, mse, nll_per_row, simulate_sur
+
 
 def main():
     N_tr, N_te, K, p, k = 240, 120, 60, 3, 4

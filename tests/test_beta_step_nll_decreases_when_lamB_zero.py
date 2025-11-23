@@ -1,5 +1,6 @@
 import numpy as np
 
+
 def test_beta_step_nll_decreases_when_lamB_zero():
     rng = np.random.default_rng(0)
     N,K,p,k = 200, 10, 3, 2
@@ -15,12 +16,12 @@ def test_beta_step_nll_decreases_when_lamB_zero():
 
     # NLL before β-step with lam_B=0
     from alsgls.metrics import nll_per_row
-    from alsgls.ops import woodbury_chol, apply_siginv_to_matrix, XB_from_Blist
+    from alsgls.ops import XB_from_Blist, apply_siginv_to_matrix, woodbury_chol
     R0 = Y - XB_from_Blist(Xs, B0)
     nll0 = float(nll_per_row(R0, F, D))
 
     # one β-step (lam_B=0)
-    from alsgls.ops import stack_B_list, unstack_B_vec, cg_solve
+    from alsgls.ops import cg_solve, stack_B_list, unstack_B_vec
     Dinv, C_chol = woodbury_chol(F, D)
     def A_mv(bvec):
         Bdir = unstack_B_vec(bvec, [p]*K)

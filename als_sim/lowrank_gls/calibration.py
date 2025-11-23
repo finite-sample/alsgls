@@ -1,6 +1,6 @@
 import numpy as np
 
-from .diagnostics import coverage_and_mahalanobis, whitening_matrix, top_eigvecs_sym
+from .diagnostics import coverage_and_mahalanobis, top_eigvecs_sym, whitening_matrix
 
 
 def apply_scale(F, D, s):
@@ -204,7 +204,7 @@ def calibrate_alpha_gamma_s_cv3_conservative(
     best = None
     for alpha in alpha_grid:
         fold_picks = []
-        for (Xs_tr, Y_tr, Xs_va, Y_va) in folds:
+        for (_Xs_tr, _Y_tr, Xs_va, Y_va) in folds:
             D_a = apply_alpha(D, alpha)
             g_star, gpack = _gamma_line_search(
                 Xs_va,

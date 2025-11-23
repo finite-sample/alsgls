@@ -42,10 +42,26 @@ test = ["pytest>=7.0", "pytest-cov>=4.0"]
 [tool.ruff]
 line-length = 88
 target-version = "py311"
+exclude = [
+    ".git",
+    "__pycache__",
+    "build",
+    "dist",
+    ".venv",
+    "als_sim",  # exclude notebooks
+]
 
 [tool.ruff.lint]
 select = ["E", "W", "F", "I", "B", "C4", "UP"]
-ignore = ["E501", "B008"]
+ignore = [
+    "E501",  # line too long (handled by formatter)
+    "E701",  # multiple statements on one line (colon)
+    "E702",  # multiple statements on one line (semicolon)
+    "E741",  # ambiguous variable names
+    "B008",  # do not perform function calls in argument defaults
+    "B023",  # function definition does not bind loop variable
+    "B904",  # raise exceptions with from err or from None
+]
 
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]

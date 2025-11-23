@@ -2,11 +2,10 @@ import numpy as np
 import numpy.linalg as npl
 
 from alsgls.ops import (
-    apply_siginv_to_matrix,
-    stack_B_list,
-    unstack_B_vec,
     XB_from_Blist,
     cg_solve,
+    stack_B_list,
+    unstack_B_vec,
 )
 
 RTOL = 5e-8

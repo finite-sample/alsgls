@@ -1,5 +1,6 @@
 import numpy as np
 
+
 def test_trace_is_nonincreasing_after_sweep_fix():
     from alsgls.als import als_gls
     rng = np.random.default_rng(7)
