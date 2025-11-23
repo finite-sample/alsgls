@@ -1,5 +1,5 @@
 alsgls: Lightweight ALS Solver for Iterative GLS
-===============================================
+=================================================
 
 .. image:: https://img.shields.io/pypi/v/alsgls.svg
    :target: https://pypi.org/project/alsgls/

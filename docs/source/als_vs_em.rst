@@ -1,5 +1,5 @@
 ALS vs EM Comparison
-===================
+=====================
 
 This section provides a detailed comparison between the Alternating Least Squares (ALS) and 
 Expectation-Maximization (EM) approaches for low-rank + diagonal GLS estimation.
