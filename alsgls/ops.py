@@ -10,8 +10,8 @@ def woodbury_pieces(F: np.ndarray, D: np.ndarray):
     """
     D = np.asarray(D)
     Dinv = 1.0 / np.clip(D, 1e-12, None)
-    FtDinv = (F.T * Dinv)            # k × K (row-scale F^T by Dinv)
-    M = FtDinv @ F                   # k × k  == F^T D^{-1} F
+    FtDinv = F.T * Dinv  # k × K (row-scale F^T by Dinv)
+    M = FtDinv @ F  # k × k  == F^T D^{-1} F
     # Solve small k×k system to get explicit C_inv for callers that expect it
     C = np.eye(F.shape[1]) + M
     C_inv = np.linalg.solve(C, np.eye(F.shape[1]))
@@ -26,10 +26,10 @@ def woodbury_chol(F: np.ndarray, D: np.ndarray):
     """
     D = np.asarray(D)
     Dinv = 1.0 / np.clip(D, 1e-12, None)
-    FtDinv = (F.T * Dinv)            # k × K
-    M = FtDinv @ F                   # k × k
+    FtDinv = F.T * Dinv  # k × K
+    M = FtDinv @ F  # k × k
     C = np.eye(F.shape[1]) + M
-    C_chol = np.linalg.cholesky(C)   # upper or lower (NumPy returns lower-triangular)
+    C_chol = np.linalg.cholesky(C)  # upper or lower (NumPy returns lower-triangular)
     return Dinv, C_chol
 
 
@@ -50,8 +50,8 @@ def _right_solve_with_C(T: np.ndarray, C_chol: np.ndarray) -> np.ndarray:
     """
     # Solve C X = T using two triangular solves with the Cholesky factor
     # NumPy's solve works fine for triangular systems as well.
-    Y = np.linalg.solve(C_chol, T)       # C_chol Y = T
-    X = np.linalg.solve(C_chol.T, Y)     # C_chol^T X = Y
+    Y = np.linalg.solve(C_chol, T)  # C_chol Y = T
+    X = np.linalg.solve(C_chol.T, Y)  # C_chol^T X = Y
     return X
 
 
@@ -78,12 +78,12 @@ def apply_siginv_to_matrix(
     if C_chol is not None:
         # Numerically stable path with Cholesky solves (preferred)
         MDinv = M * Dinv[None, :]
-        T1 = MDinv @ F                   # (N × k)
+        T1 = MDinv @ F  # (N × k)
         # Compute T2 = T1 @ C^{-1} without forming C^{-1}
         # Solve C Z^T = T1^T  ->  Z^T = C^{-1} T1^T  ->  T2 = Z^T
         ZT = _right_solve_with_C(T1.T, C_chol)  # (k × N)
         T2 = ZT.T
-        T3 = T2 @ (F.T * Dinv)           # (N × K)
+        T3 = T2 @ (F.T * Dinv)  # (N × K)
         return MDinv - T3
 
     # Fallback to explicit inverse if provided (or compute it)
@@ -94,9 +94,9 @@ def apply_siginv_to_matrix(
             Dinv = Dinv_tmp
 
     MDinv = M * Dinv[None, :]
-    T1 = MDinv @ F                       # (N × k)
-    T2 = T1 @ C_inv                      # (N × k)
-    T3 = T2 @ (F.T * Dinv)               # (N × K)
+    T1 = MDinv @ F  # (N × k)
+    T2 = T1 @ C_inv  # (N × k)
+    T3 = T2 @ (F.T * Dinv)  # (N × K)
     return MDinv - T3
 
 
@@ -193,7 +193,6 @@ def siginv_diag(F: np.ndarray, Dinv: np.ndarray, C_chol: np.ndarray) -> np.ndarr
     # Compute C^{-1} F^T via two triangular solves
     Cinv_Ft = _right_solve_with_C(F.T, C_chol)  # (k × K)
     # Row-wise quadratic forms f_j^T C^{-1} f_j  =  sum over k of (F * (C^{-1} F^T)^T)
-    row_q = np.sum(F * Cinv_Ft.T, axis=1)       # (K,)
-    diag_Sinv = Dinv - (Dinv ** 2) * row_q
+    row_q = np.sum(F * Cinv_Ft.T, axis=1)  # (K,)
+    diag_Sinv = Dinv - (Dinv**2) * row_q
     return diag_Sinv
-

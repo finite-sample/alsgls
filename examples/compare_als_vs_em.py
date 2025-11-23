@@ -25,10 +25,17 @@ def main():
 
     print("=== SUR (ALS vs EM) ===")
     print(f"K={K}  p={p}  k={k}  N_tr={N_tr}  N_te={N_te}")
-    print(f"ALS:  sec={sec_a:.3f}  mem_MB≈{mem_a:.3f}  MSE={m_a:.4f}  NLL/N={nll_a:.3f}")
-    print(f"EM:   sec={sec_e:.3f}  mem_MB≈{mem_e:.3f}  MSE={m_e:.4f}  NLL/N={nll_e:.3f}")
+    print(
+        f"ALS:  sec={sec_a:.3f}  mem_MB≈{mem_a:.3f}  MSE={m_a:.4f}  NLL/N={nll_a:.3f}"
+    )
+    print(
+        f"EM:   sec={sec_e:.3f}  mem_MB≈{mem_e:.3f}  MSE={m_e:.4f}  NLL/N={nll_e:.3f}"
+    )
     print("Deltas (ALS - EM):")
-    print(f"  Δsec={sec_a-sec_e:+.3f}  Δmem={mem_a-mem_e:+.3f}  ΔMSE={m_a-m_e:+.4f}  ΔNLL/N={nll_a-nll_e:+.3f}")
+    print(
+        f"  Δsec={sec_a - sec_e:+.3f}  Δmem={mem_a - mem_e:+.3f}  ΔMSE={m_a - m_e:+.4f}  ΔNLL/N={nll_a - nll_e:+.3f}"
+    )
+
 
 if __name__ == "__main__":
     main()

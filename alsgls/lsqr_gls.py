@@ -15,6 +15,7 @@ The implementation follows the write-up in the project documentation and is
 careful to avoid forming dense K×K matrices except for a skinny SVD of the
 Woodbury core.
 """
+
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
@@ -187,12 +188,17 @@ def solve_gls_weighted(
     probe = X_Tdot(np.zeros_like(y))
     P = int(np.asarray(probe).shape[0])
 
-    W = WoodburyWeight(d=np.asarray(d, dtype=float), F=None if F is None else np.asarray(F, dtype=float))
+    W = WoodburyWeight(
+        d=np.asarray(d, dtype=float),
+        F=None if F is None else np.asarray(F, dtype=float),
+    )
     A = GLSLinearOperator(X_dot, X_Tdot, W, N=N, K=K, P=P)
     b = W.W_apply(y).reshape(N * K)
 
     if method == "lsmr":
-        sol = lsmr(A, b, atol=atol, btol=btol, conlim=conlim, maxiter=maxiter, show=verbose)
+        sol = lsmr(
+            A, b, atol=atol, btol=btol, conlim=conlim, maxiter=maxiter, show=verbose
+        )
         beta = sol[0]
         info = {
             "method": "lsmr",
@@ -205,7 +211,9 @@ def solve_gls_weighted(
             "normx": sol[7],
         }
     elif method == "lsqr":
-        sol = lsqr(A, b, atol=atol, btol=btol, conlim=conlim, iter_lim=maxiter, show=verbose)
+        sol = lsqr(
+            A, b, atol=atol, btol=btol, conlim=conlim, iter_lim=maxiter, show=verbose
+        )
         beta = sol[0]
         info = {
             "method": "lsqr",

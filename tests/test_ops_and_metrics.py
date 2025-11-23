@@ -10,6 +10,7 @@ def rand_spd_diag(K, rng):
     d = 0.3 + rng.random(K)
     return d
 
+
 def test_woodbury_matches_dense_small():
     rng = np.random.default_rng(0)
     K, k = 8, 3
@@ -28,6 +29,7 @@ def test_woodbury_matches_dense_small():
 
     assert np.allclose(MD, MD_w, rtol=5e-7, atol=5e-8)
 
+
 def test_diag_of_siginv_matches_dense():
     rng = np.random.default_rng(1)
     K, k = 10, 2
@@ -42,6 +44,7 @@ def test_diag_of_siginv_matches_dense():
     d_d = np.diag(S_inv)
 
     assert np.allclose(d_w, d_d, rtol=5e-7, atol=5e-8)
+
 
 def test_nll_is_finite_and_sane():
     rng = np.random.default_rng(2)

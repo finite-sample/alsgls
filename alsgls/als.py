@@ -199,7 +199,9 @@ def als_gls(
 
             # MLE scalar c* for Σ = c * (F_try F_try^T + diag D_try)
             Dinv_s, C_chol_s = woodbury_chol(F_try, D_try)
-            RSinv_s = apply_siginv_to_matrix(R, F_try, D_try, Dinv=Dinv_s, C_chol=C_chol_s)
+            RSinv_s = apply_siginv_to_matrix(
+                R, F_try, D_try, Dinv=Dinv_s, C_chol=C_chol_s
+            )
             quad_over_N = float(np.sum(RSinv_s * R)) / N
             c_star = max(quad_over_N / K, scale_floor)
 
@@ -256,10 +258,10 @@ def als_gls(
     info = {
         "p_list": p_list,
         "cg": cg_info,
-        "nll_trace": nll_trace,           # post-Σ
-        "nll_sigma_trace": nll_trace,     # alias for clarity
-        "nll_beta_trace": nll_beta_trace, # post-β (per-sweep baseline)
-        "accept_t": accept_t_trace,       # accepted t (0.0 means kept previous F,D)
-        "scale_used": scale_used_trace,   # accepted c* (1.0 means no scale applied)
+        "nll_trace": nll_trace,  # post-Σ
+        "nll_sigma_trace": nll_trace,  # alias for clarity
+        "nll_beta_trace": nll_beta_trace,  # post-β (per-sweep baseline)
+        "accept_t": accept_t_trace,  # accepted t (0.0 means kept previous F,D)
+        "scale_used": scale_used_trace,  # accepted c* (1.0 means no scale applied)
     }
     return B, F, D, mem_mb_est, info

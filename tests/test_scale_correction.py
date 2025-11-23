@@ -6,8 +6,10 @@ from alsgls.ops import apply_siginv_to_matrix, woodbury_chol
 RTOL = 1e-9
 ATOL = 1e-10
 
+
 def _nll(R, F, D):
     return float(nll_per_row(R, F, D))
+
 
 def test_mle_scalar_c_is_optimal_and_non_worsening():
     rng = np.random.default_rng(99)

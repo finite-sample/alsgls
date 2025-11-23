@@ -40,6 +40,7 @@ def test_als_vs_em_basic():
 
     # Check that both achieve similar test MSE
     from alsgls import XB_from_Blist
+
     Y_pred_als = XB_from_Blist(Xs_te, B_als)
     Y_pred_em = XB_from_Blist(Xs_te, B_em)
 

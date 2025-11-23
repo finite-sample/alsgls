@@ -7,10 +7,12 @@ from alsgls.ops import apply_siginv_to_matrix, siginv_diag, woodbury_chol
 RTOL = 5e-8
 ATOL = 5e-9
 
+
 def rand_spd_diag(K, rng):
     # moderately conditioned diagonal
     d = 0.25 + rng.random(K)
     return d
+
 
 def test_woodbury_matches_dense_right_multiply():
     rng = np.random.default_rng(42)
@@ -28,6 +30,7 @@ def test_woodbury_matches_dense_right_multiply():
 
     assert np.allclose(dense, wb, rtol=RTOL, atol=ATOL)
 
+
 def test_diag_of_siginv_matches_dense():
     rng = np.random.default_rng(123)
     K, k = 12, 4
@@ -42,6 +45,7 @@ def test_diag_of_siginv_matches_dense():
     d_d = np.diag(S_inv)
 
     assert np.allclose(d_w, d_d, rtol=RTOL, atol=ATOL)
+
 
 def test_nll_logdet_via_cholesky_consistency():
     rng = np.random.default_rng(7)

@@ -10,7 +10,11 @@ def _random_sur(rng, N=60, K=4, p=3):
     F = rng.standard_normal((K, 2)) / np.sqrt(K)
     D = 0.4 + 0.2 * rng.random(K)
     Z = rng.standard_normal((N, 2))
-    Y = XB_from_Blist(Xs, B) + Z @ F.T + rng.standard_normal((N, K)) * np.sqrt(D)[None, :]
+    Y = (
+        XB_from_Blist(Xs, B)
+        + Z @ F.T
+        + rng.standard_normal((N, K)) * np.sqrt(D)[None, :]
+    )
     return Xs, Y
 
 

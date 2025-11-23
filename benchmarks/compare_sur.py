@@ -26,7 +26,11 @@ def _simulate_sur(N_tr: int, N_te: int, K: int, p: int, k: int, seed: int):
     F = rng.standard_normal((K, k)) / np.sqrt(max(K, 1))
     D = 0.2 + 0.3 * rng.random(K)
     Z = rng.standard_normal((N, k))
-    Y = XB_from_Blist(Xs, B) + Z @ F.T + rng.standard_normal((N, K)) * np.sqrt(D)[None, :]
+    Y = (
+        XB_from_Blist(Xs, B)
+        + Z @ F.T
+        + rng.standard_normal((N, K)) * np.sqrt(D)[None, :]
+    )
     return (
         [X[:N_tr] for X in Xs],
         Y[:N_tr],
@@ -61,7 +65,9 @@ def _maybe_memray_runner(func, *args, **kwargs):
         try:
             import memray
         except ImportError:
-            raise RuntimeError("memray is not installed; install memray or use --memory-backend none")
+            raise RuntimeError(
+                "memray is not installed; install memray or use --memory-backend none"
+            )
 
         with tempfile.TemporaryDirectory() as tmpdir:
             path = Path(tmpdir) / "run.bin"
@@ -102,7 +108,12 @@ def _run_statsmodels(system, **fit_kwargs):
     for name in system.keys():
         params.append(np.asarray(results.params.loc[name]).reshape(-1, 1))
     fitted = np.column_stack([results.predict(eq=name) for name in system.keys()])
-    return {"B": params, "sigma": sigma, "fitted": fitted, "resid": np.asarray(results.resid)}, "ok"
+    return {
+        "B": params,
+        "sigma": sigma,
+        "fitted": fitted,
+        "resid": np.asarray(results.resid),
+    }, "ok"
 
 
 def _run_linearmodels(system, **fit_kwargs):
@@ -161,9 +172,15 @@ def run_benchmark(
             return model, preds
 
         t0 = time.perf_counter()
-        (als_model, als_preds), als_peak = _maybe_memray_runner(_als_run, backend=memory_backend)
+        (als_model, als_preds), als_peak = _maybe_memray_runner(
+            _als_run, backend=memory_backend
+        )
         wall = time.perf_counter() - t0
-        beta_rmse = float(np.sqrt(np.mean((_stack_beta(als_model.B_list_) - _stack_beta(B_true)) ** 2)))
+        beta_rmse = float(
+            np.sqrt(
+                np.mean((_stack_beta(als_model.B_list_) - _stack_beta(B_true)) ** 2)
+            )
+        )
         nll = float(nll_per_row(Y_te - als_preds, als_model.F_, als_model.D_))
         results.append(
             BenchmarkResult(
@@ -180,7 +197,10 @@ def run_benchmark(
             )
         )
 
-        for name, runner in ("statsmodels", _run_statsmodels), ("linearmodels", _run_linearmodels):
+        for name, runner in (
+            ("statsmodels", _run_statsmodels),
+            ("linearmodels", _run_linearmodels),
+        ):
             t0 = time.perf_counter()
             payload, status = runner(system)
             wall = time.perf_counter() - t0

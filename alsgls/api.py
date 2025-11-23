@@ -110,7 +110,9 @@ class ALSGLS:
 
         N, K = Y_arr.shape
         if len(X_list) != K:
-            raise ValueError(f"Received {len(X_list)} design matrices for {K} equations")
+            raise ValueError(
+                f"Received {len(X_list)} design matrices for {K} equations"
+            )
 
         for j, X in enumerate(X_list):
             if X.shape[0] != N:
@@ -163,7 +165,9 @@ class ALSGLS:
             raise ValueError("Number of design matrices does not match fitted model")
         for j, (X, B) in enumerate(zip(X_list, self.B_list_, strict=False)):
             if X.shape[1] != B.shape[0]:
-                raise ValueError(f"X[{j}] has {X.shape[1]} columns but expected {B.shape[0]}")
+                raise ValueError(
+                    f"X[{j}] has {X.shape[1]} columns but expected {B.shape[0]}"
+                )
         return XB_from_Blist(X_list, self.B_list_)
 
     def score(self, Xs: Sequence[Any], Y: Any) -> float:
@@ -292,9 +296,7 @@ class ALSGLSSystemResults:
         flattened = [b.ravel() for b in estimator.B_list_ if b.size]
         self.params = np.concatenate(flattened) if flattened else np.empty(0)
         self.param_labels = [
-            (eq.name, col)
-            for eq in model._equations
-            for col in eq.column_names
+            (eq.name, col) for eq in model._equations for col in eq.column_names
         ]
         self.B_list = estimator.B_list_
         self.F = estimator.F_
@@ -314,10 +316,14 @@ class ALSGLSSystemResults:
         except ImportError as exc:  # pragma: no cover - optional dependency
             raise RuntimeError("pandas is required for params_as_series()") from exc
 
-        mi = pd.MultiIndex.from_tuples(self.param_labels, names=["equation", "variable"])
+        mi = pd.MultiIndex.from_tuples(
+            self.param_labels, names=["equation", "variable"]
+        )
         return pd.Series(self.params, index=mi)
 
-    def predict(self, exog: Mapping[Any, Any] | Sequence[Any] | None = None) -> np.ndarray:
+    def predict(
+        self, exog: Mapping[Any, Any] | Sequence[Any] | None = None
+    ) -> np.ndarray:
         if exog is None:
             Xs = [eq.X for eq in self.model._equations]
         else:

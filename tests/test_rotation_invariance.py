@@ -13,7 +13,11 @@ def test_nll_invariant_under_factor_rotation():
     F_true = rng.standard_normal((K, k)) / np.sqrt(K)
     D_true = 0.2 + 0.3 * rng.random(K)
     Z = rng.standard_normal((N, k))
-    Y = XB_from_Blist(Xs, B_true) + Z @ F_true.T + rng.standard_normal((N, K)) * np.sqrt(D_true)
+    Y = (
+        XB_from_Blist(Xs, B_true)
+        + Z @ F_true.T
+        + rng.standard_normal((N, K)) * np.sqrt(D_true)
+    )
 
     B_hat, F_hat, D_hat, _, _ = als_gls(Xs, Y, k=k, sweeps=10, rel_tol=1e-8)
     residuals = Y - XB_from_Blist(Xs, B_hat)

@@ -11,13 +11,16 @@ from alsgls.ops import (
 RTOL = 5e-8
 ATOL = 5e-9
 
+
 def test_cg_matches_dense_beta_solve():
     rng = np.random.default_rng(2025)
     N, K = 20, 5
     p_list = [3, 2, 4, 1, 3]
     Xs = [rng.standard_normal((N, pj)) for pj in p_list]
     B_true = [rng.standard_normal((pj, 1)) for pj in p_list]
-    Y = np.column_stack([Xs[j] @ B_true[j] for j in range(K)]) + 0.01 * rng.standard_normal((N, K))
+    Y = np.column_stack(
+        [Xs[j] @ B_true[j] for j in range(K)]
+    ) + 0.01 * rng.standard_normal((N, K))
 
     # A small Sigma (use dense path here just for the test)
     k = 2
@@ -54,8 +57,8 @@ def test_cg_matches_dense_beta_solve():
     # ---- CG operator path (matrix-free)
     def A_mv(bvec):
         B_dir = unstack_B_vec(bvec, p_list)
-        M = XB_from_Blist(Xs, B_dir)          # N × K
-        S_M = M @ S_inv                        # N × K
+        M = XB_from_Blist(Xs, B_dir)  # N × K
+        S_M = M @ S_inv  # N × K
         out_blocks = [Xs[j].T @ S_M[:, [j]] for j in range(K)]
         out = np.concatenate(out_blocks, axis=0).ravel()
         return out + lam_B * bvec
