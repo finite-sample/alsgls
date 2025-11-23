@@ -1,13 +1,13 @@
 [build-system]
-requires = ["setuptools>=61.0"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling>=1.21.1"]
+build-backend = "hatchling.build"
 
 [project]
 name = "alsgls"
 version = "0.3.0"
 description = "Lightweight low-rank+diag GLS/SUR via ALS with EM baseline"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 authors = [{ name = "Gaurav Sood", email = "contact@gsood.com" }]
 license = { text = "MIT" }
 urls = { "Homepage" = "https://github.com/finite-sample/alsgls" }
@@ -31,5 +31,28 @@ docs = [
   "ipython",
 ]
 
-[tool.setuptools]
+
+[tool.hatch.build.targets.wheel]
 packages = ["alsgls"]
+
+[dependency-groups]
+dev = ["pytest>=7.0", "pytest-cov>=4.0", "ruff>=0.7.0", "mypy>=1.0", "pre-commit>=3.0"]
+test = ["pytest>=7.0", "pytest-cov>=4.0"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "B", "C4", "UP"]
+ignore = ["E501", "B008"]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]
+"tests/*" = ["S101"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+check_untyped_defs = true
