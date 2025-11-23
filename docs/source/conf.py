@@ -10,7 +10,11 @@ import importlib.metadata
 
 _metadata = importlib.metadata.metadata("alsgls")
 project = _metadata["Name"]
-author = _metadata["Author-email"].split(" <")[0] if "Author-email" in _metadata else "Gaurav Sood"
+author = (
+    _metadata["Author-email"].split(" <")[0]
+    if "Author-email" in _metadata
+    else "Gaurav Sood"
+)
 copyright = "2024, " + author
 release = _metadata["Version"]
 
