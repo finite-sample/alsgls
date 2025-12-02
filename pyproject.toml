@@ -1,6 +1,6 @@
 [build-system]
-requires = ["hatchling>=1.21.1"]
-build-backend = "hatchling.build"
+requires = ["uv_build"]
+build-backend = "uv_build"
 
 [project]
 name = "alsgls"
@@ -25,15 +25,15 @@ dev = ["pytest>=7.0", "scipy>=1.0"]
 lsqr = ["scipy>=1.0"]
 docs = [
   "sphinx>=7.0",
-  "sphinx-rtd-theme",
+  "furo",
   "sphinx-autodoc-typehints",
   "nbsphinx",
   "ipython",
 ]
 
 
-[tool.hatch.build.targets.wheel]
-packages = ["alsgls"]
+[tool.uv.build-backend]
+module-root = "."
 
 [dependency-groups]
 dev = ["pytest>=7.0", "pytest-cov>=4.0", "ruff>=0.7.0", "mypy>=1.0", "pre-commit>=3.0"]
