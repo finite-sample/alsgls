@@ -28,7 +28,7 @@ extensions = [
     "sphinx.ext.napoleon",
     "sphinx.ext.intersphinx",
     "sphinx.ext.mathjax",
-    "nbsphinx",
+    "myst_parser",
 ]
 
 templates_path = ["_templates"]
@@ -47,6 +47,20 @@ napoleon_google_docstring = True
 napoleon_numpy_docstring = True
 napoleon_include_init_with_doc = False
 napoleon_include_private_with_doc = False
+
+# MyST settings
+myst_enable_extensions = [
+    "colon_fence",
+    "deflist",
+    "html_image",
+    "replacements",
+    "smartquotes",
+    "tasklist",
+]
+source_suffix = {
+    ".rst": "restructuredtext",
+    ".md": "markdown",
+}
 
 # Autodoc settings
 autodoc_default_options = {

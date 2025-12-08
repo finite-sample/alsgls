@@ -1,58 +1,64 @@
-alsgls package
-==============
+# alsgls package
 
+```{eval-rst}
 .. automodule:: alsgls
    :members:
    :undoc-members:
    :show-inheritance:
+```
 
-Submodules
-----------
+## Submodules
 
-alsgls.als module
------------------
+### alsgls.als module
 
+```{eval-rst}
 .. automodule:: alsgls.als
    :members:
    :undoc-members:
    :show-inheritance:
+```
 
-alsgls.em module
-----------------
+### alsgls.em module
 
+```{eval-rst}
 .. automodule:: alsgls.em
    :members:
    :undoc-members:
    :show-inheritance:
+```
 
-alsgls.ops module
------------------
+### alsgls.ops module
 
+```{eval-rst}
 .. automodule:: alsgls.ops
    :members:
    :undoc-members:
    :show-inheritance:
+```
 
-alsgls.api module
------------------
+### alsgls.api module
 
+```{eval-rst}
 .. automodule:: alsgls.api
    :members:
    :undoc-members:
    :show-inheritance:
+```
 
-alsgls.sim module
------------------
+### alsgls.sim module
 
+```{eval-rst}
 .. automodule:: alsgls.sim
    :members:
    :undoc-members:
    :show-inheritance:
+```
 
-alsgls.metrics module
----------------------
+### alsgls.metrics module
 
+```{eval-rst}
 .. automodule:: alsgls.metrics
    :members:
    :undoc-members:
    :show-inheritance:
+```
