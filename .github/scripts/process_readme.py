@@ -18,7 +18,7 @@ def process_include_directive(match):
         return f"<!-- File not found: {include_path} -->"
 
     try:
-        with open(file_path, encoding='utf-8') as f:
+        with open(file_path, encoding="utf-8") as f:
             content = f.read().rstrip()
         return content
     except Exception as e:
@@ -36,14 +36,14 @@ def process_readme():
         template_file = output_file
 
     try:
-        with open(template_file, encoding='utf-8') as f:
+        with open(template_file, encoding="utf-8") as f:
             content = f.read()
     except FileNotFoundError:
         print(f"Template file {template_file} not found!")
         sys.exit(1)
 
     # Pattern to match MyST include directives
-    include_pattern = r'```\{include\}\s+([^`]+)\s*```'
+    include_pattern = r"```\{include\}\s+([^`]+)\s*```"
 
     # Process all include directives
     processed_content = re.sub(include_pattern, process_include_directive, content)
@@ -55,7 +55,7 @@ def process_readme():
 """
 
     # Write the processed content
-    with open(output_file, 'w', encoding='utf-8') as f:
+    with open(output_file, "w", encoding="utf-8") as f:
         f.write(header + processed_content)
 
     print(f"Successfully processed {template_file} -> {output_file}")
