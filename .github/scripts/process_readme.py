@@ -28,7 +28,7 @@ def process_include_directive(match):
 
 def process_readme():
     """Process README template and generate final README.md."""
-    template_file = Path("README.template.md")
+    template_file = Path("docs/README.template.md")
     output_file = Path("README.md")
 
     # Use existing README.md as template if no template exists
