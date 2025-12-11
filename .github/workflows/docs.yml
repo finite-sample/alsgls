@@ -2,19 +2,7 @@ name: Documentation
 
 on:
   push:
-    paths:
-      - 'README.template.md'
-      - 'docs/source/_snippets/**'
-      - 'docs/source/**'
-      - 'alsgls/**'
-      - 'pyproject.toml'
   pull_request:
-    paths:
-      - 'README.template.md'
-      - 'docs/source/_snippets/**'
-      - 'docs/source/**'
-      - 'alsgls/**'
-      - 'pyproject.toml'
   workflow_dispatch:
 
 permissions:
