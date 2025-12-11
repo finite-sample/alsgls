@@ -32,7 +32,10 @@ extensions = [
 ]
 
 templates_path = ["_templates"]
-exclude_patterns = ["_snippets/"]
+exclude_patterns = ["_snippets/", "_build"]
+
+# Suppress specific warnings for clean CI builds
+suppress_warnings = ["myst.header"]
 
 # -- Options for HTML output ------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
@@ -71,7 +74,7 @@ autodoc_default_options = {
 }
 
 # Autosummary settings
-autosummary_generate = True
+autosummary_generate = False  # Disable autosummary generation
 
 # Intersphinx mapping
 intersphinx_mapping = {
