@@ -32,7 +32,7 @@ extensions = [
 ]
 
 templates_path = ["_templates"]
-exclude_patterns = []
+exclude_patterns = ["_snippets/"]
 
 # -- Options for HTML output ------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
@@ -57,6 +57,7 @@ myst_enable_extensions = [
     "smartquotes",
     "tasklist",
 ]
+myst_heading_anchors = 2  # Allow documents to start with H2
 source_suffix = {
     ".rst": "restructuredtext",
     ".md": "markdown",
