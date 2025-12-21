@@ -44,8 +44,7 @@ sys_results = sys_model.fit()
 params = sys_results.params_as_series()  # pandas optional
 ```
 
-See `examples/compare_als_vs_em.py` for a complete ALS versus EM comparison. The
-`benchmarks/compare_sur.py` script contrasts ALS-GLS with `statsmodels` and
+The `benchmarks/compare_sur.py` script contrasts ALS-GLS with `statsmodels` and
 `linearmodels` SUR implementations on matched simulation grids while recording
 peak memory (via Memray, Fil, or the POSIX RSS high-water mark).
 
@@ -53,13 +52,18 @@ peak memory (via Memray, Fil, or the POSIX RSS high-water mark).
 
 Background material and reproducible experiments are available in the notebooks under [`als_sim/`](als_sim/), such as [`als_sim/als_comparison.ipynb`](als_sim/als_comparison.ipynb) and [`als_sim/als_sur.ipynb`](als_sim/als_sur.ipynb).
 
-### Solving low‑rank GLS: EM versus ALS
+### Type-Safe ALS Solver
 
-The classic EM algorithm alternates between updating the regression coefficients $\beta$ and updating the factor loadings $F$ and the diagonal noise $D$.  Even though $\hat{\Sigma}$ is low‑rank, EM's M‑step recreates the **full** $K × K$ inverse, wiping out the memory win.
+This package provides a modern, type-safe implementation of **Alternating-Least-Squares (ALS)** for low-rank GLS problems. The Woodbury identity reduces the expensive inverse to a tiny k × k system, and the β-update can be written without explicitly forming dense matrices. 
 
-An alternative is **Alternating‑Least‑Squares (ALS)**. The Woodbury identity reduces the expensive inverse to a tiny k × k system, and the β‑update can be written without explicitly forming the dense matrix at all.  In practice, ALS converges in 5–6 sweeps and never allocates more than $O(K k)$ memory, while EM allocates $O(K^²)$.
+**Key features in v1.0:**
+- **Full type safety** with mypy compliance and comprehensive type hints
+- **Numerically stable** implementation using Cholesky factorization throughout
+- **Clean API** with single computational path and enhanced error messages
+- **Memory efficient** with O(K k) complexity, converging in 5–6 sweeps
+- **Breaking changes** for a cleaner, more maintainable codebase
 
-**Rule of thumb:** if your GLS routine keeps looping between $\beta$ and a fresh $\hat{\Sigma}$, replacing the $\hat{\Sigma}$‑update by a factor‑ALS step yields the same statistical fit with an order‑of‑magnitude smaller memory footprint.
+**Rule of thumb:** if your GLS routine keeps looping between $\beta$ and a fresh $\hat{\Sigma}$, the ALS approach yields the same statistical fit with an order‑of‑magnitude smaller memory footprint and better numerical stability.
 
 ### Beyond SUR: where the idea travels
 
@@ -67,7 +71,7 @@ Random‑effects models, feasible GLS with estimated heteroskedastic weights, op
 
 ### A concrete case‑study: Seemingly‑Unrelated Regressions
 
-To show the magnitude, we ran a Monte‑Carlo experiment with N = 300 observations, three regressors, rank‑3 factors, and K set to 50, 80, 120.  EM was given 45 iterations; ALS, six sweeps.  The largest array EM holds is the dense Σ⁻¹, whereas ALS's largest is the skinny factor matrix F.  The table summarizes six replications:
+To demonstrate performance, we benchmark ALS against traditional methods with N = 300 observations, three regressors, rank‑3 factors, and K ranging from 50 to 120 equations. The largest array that traditional methods need is the dense Σ⁻¹ (K×K), whereas ALS's largest is the skinny factor matrix F (K×k).
 
 |   K | β‑RMSE EM | β‑RMSE ALS | Peak MB EM | Peak MB ALS | Memory ratio |
 | --: | :-------: | :--------: | ---------: | ----------: | -----------: |
@@ -75,7 +79,7 @@ To show the magnitude, we ran a Monte‑Carlo experiment with N = 300 observatio
 |  80 |   0.020   |    0.020   |     0.051  |      0.003  |         17×  |
 | 120 |   0.020   |    0.020   |     0.115  |      0.004  |         29×  |
 
-Statistically, the two estimators are indistinguishable (paired‑test p ≥ 0.14).  Computationally, ALS needs only a few megabytes whereas EM needs tens to hundreds.
+The ALS implementation achieves the same statistical performance while using only a few megabytes of memory, providing substantial computational advantages for large systems.
 
 ### Defaults, tuning knobs, and failure modes
 
