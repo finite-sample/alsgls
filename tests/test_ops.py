@@ -27,7 +27,7 @@ def test_apply_siginv_to_matrix():
 
     # Get Cholesky factor
     Dinv, C_chol = woodbury_chol(F, D)
-    
+
     # Validate apply_siginv_to_matrix against explicit inverse
     M = rng.standard_normal((3, K))
     expected = M @ Sigma_inv
