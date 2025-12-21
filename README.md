@@ -67,7 +67,7 @@ Random‑effects models, feasible GLS with estimated heteroskedastic weights, op
 
 ### A concrete case‑study: Seemingly‑Unrelated Regressions
 
-To show the magnitude, we ran a Monte‑Carlo experiment with N = 300 observations, three regressors, rank‑3 factors, and K set to 50, 80, 120.  EM was given 45 iterations; ALS, six sweeps.  The largest array EM holds is the dense Σ⁻¹, whereas ALS's largest is the skinny factor matrix F.  The table summarises six replications:
+To show the magnitude, we ran a Monte‑Carlo experiment with N = 300 observations, three regressors, rank‑3 factors, and K set to 50, 80, 120.  EM was given 45 iterations; ALS, six sweeps.  The largest array EM holds is the dense Σ⁻¹, whereas ALS's largest is the skinny factor matrix F.  The table summarizes six replications:
 
 |   K | β‑RMSE EM | β‑RMSE ALS | Peak MB EM | Peak MB ALS | Memory ratio |
 | --: | :-------: | :--------: | ---------: | ----------: | -----------: |
