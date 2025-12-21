@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 import numpy as np
-
 
 
 def woodbury_chol(F: np.ndarray, D: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -56,7 +56,7 @@ def apply_siginv_to_matrix(
     Σ = F F^T + diag(D).
 
     Uses numerically stable Cholesky factorization approach.
-    
+
     Parameters
     ----------
     M : np.ndarray
@@ -69,7 +69,7 @@ def apply_siginv_to_matrix(
         Pre-computed 1/D. If None, computed from D.
     C_chol : np.ndarray
         Cholesky factor of C = I + F^T D^{-1} F
-        
+
     Returns
     -------
     np.ndarray
@@ -108,12 +108,12 @@ def XB_from_Blist(Xs: list[np.ndarray], B_list: list[np.ndarray]) -> np.ndarray:
 
 
 def cg_solve(
-    operator_mv: Callable[[np.ndarray], np.ndarray], 
-    b: np.ndarray, 
-    x0: np.ndarray | None = None, 
-    maxit: int = 500, 
-    tol: float = 1e-7, 
-    M_pre: Callable[[np.ndarray], np.ndarray] | None = None
+    operator_mv: Callable[[np.ndarray], np.ndarray],
+    b: np.ndarray,
+    x0: np.ndarray | None = None,
+    maxit: int = 500,
+    tol: float = 1e-7,
+    M_pre: Callable[[np.ndarray], np.ndarray] | None = None,
 ) -> tuple[np.ndarray, dict[str, Any]]:
     """
     Conjugate gradient for SPD operator A (matrix-free).

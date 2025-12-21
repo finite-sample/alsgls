@@ -6,7 +6,7 @@ from .sim import simulate_gls, simulate_sur
 
 __all__ = [
     "ALSGLS",
-    "ALSGLSSystem", 
+    "ALSGLSSystem",
     "ALSGLSSystemResults",
     "XB_from_Blist",
     "als_gls",

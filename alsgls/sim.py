@@ -5,7 +5,9 @@ import numpy as np
 from .ops import XB_from_Blist
 
 
-def simulate_sur(N_tr: int, N_te: int, K: int, p: int, k: int, seed: int = 0) -> tuple[list[np.ndarray], np.ndarray, list[np.ndarray], np.ndarray]:
+def simulate_sur(
+    N_tr: int, N_te: int, K: int, p: int, k: int, seed: int = 0
+) -> tuple[list[np.ndarray], np.ndarray, list[np.ndarray], np.ndarray]:
     """Simulate a Seemingly Unrelated Regression (SUR) dataset.
 
     Parameters
@@ -59,7 +61,9 @@ def simulate_sur(N_tr: int, N_te: int, K: int, p: int, k: int, seed: int = 0) ->
     return [X[:N_tr] for X in Xs], Y[:N_tr], [X[N_tr:] for X in Xs], Y[N_tr:]
 
 
-def simulate_gls(N_tr: int, N_te: int, p_list: list[int], k: int, seed: int = 0) -> tuple[list[np.ndarray], np.ndarray, list[np.ndarray], np.ndarray]:
+def simulate_gls(
+    N_tr: int, N_te: int, p_list: list[int], k: int, seed: int = 0
+) -> tuple[list[np.ndarray], np.ndarray, list[np.ndarray], np.ndarray]:
     """Simulate a generalized least squares (GLS) dataset.
 
     This variant allows each response equation to have its own number of

@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from typing import Any, Callable
+from typing import Any
 
 import numpy as np
 
-from ._validation import _validate_gls_inputs, _validate_convergence_params
+from ._validation import _validate_convergence_params, _validate_gls_inputs
 from .metrics import nll_per_row
 from .ops import (
     XB_from_Blist,
@@ -76,8 +76,9 @@ def als_gls(
     # Input validation
     # ----------------------------
     Xs, Y, k, lam_F, lam_B = _validate_gls_inputs(Xs, Y, k, lam_F=lam_F, lam_B=lam_B)
-    conv_params = _validate_convergence_params(sweeps=sweeps, rel_tol=rel_tol, 
-                                             cg_maxit=cg_maxit, cg_tol=cg_tol)
+    _validate_convergence_params(
+        sweeps=sweeps, rel_tol=rel_tol, cg_maxit=cg_maxit, cg_tol=cg_tol
+    )
     N, K = Y.shape
 
     p_list = [X.shape[1] for X in Xs]

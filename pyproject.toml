@@ -4,8 +4,8 @@ build-backend = "uv_build"
 
 [project]
 name = "alsgls"
-version = "0.3.0"
-description = "Lightweight low-rank+diag GLS/SUR via ALS with EM baseline"
+version = "1.0.0"
+description = "Type-safe lightweight low-rank+diagonal GLS/SUR solver via ALS"
 readme = "README.md"
 requires-python = ">=3.11"
 authors = [{ name = "Gaurav Sood", email = "contact@gsood.com" }]
