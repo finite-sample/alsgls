@@ -25,7 +25,8 @@ def test_woodbury_matches_dense_small():
     MD = M @ S_inv
 
     # Woodbury
-    MD_w = apply_siginv_to_matrix(M, F, D)
+    Dinv, C_chol = woodbury_chol(F, D)
+    MD_w = apply_siginv_to_matrix(M, F, D, C_chol=C_chol)
 
     assert np.allclose(MD, MD_w, rtol=5e-7, atol=5e-8)
 
