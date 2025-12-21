@@ -12,11 +12,11 @@ from alsgls.ops import (
     cg_solve,
     stack_B_list,
     unstack_B_vec,
-    woodbury_pieces,
+    woodbury_chol,
 )
 
 
-def test_woodbury_pieces_and_apply_siginv_to_matrix():
+def test_apply_siginv_to_matrix():
     rng = np.random.default_rng(0)
     K, k = 5, 2
     F = rng.standard_normal((K, k))
@@ -25,19 +25,17 @@ def test_woodbury_pieces_and_apply_siginv_to_matrix():
     Sigma = F @ F.T + np.diag(D)
     Sigma_inv = np.linalg.inv(Sigma)
 
-    # Validate woodbury_pieces
-    Dinv, C_inv = woodbury_pieces(F, D)
-    Sigma_inv_wb = np.diag(Dinv) - (F * Dinv[:, None]) @ C_inv @ (F.T * Dinv)
-    assert np.allclose(Sigma_inv_wb, Sigma_inv, atol=1e-12, rtol=1e-12)
-
+    # Get Cholesky factor
+    Dinv, C_chol = woodbury_chol(F, D)
+    
     # Validate apply_siginv_to_matrix against explicit inverse
     M = rng.standard_normal((3, K))
     expected = M @ Sigma_inv
-    # without cached pieces
-    got = apply_siginv_to_matrix(M, F, D)
+    # Test with required C_chol parameter
+    got = apply_siginv_to_matrix(M, F, D, C_chol=C_chol)
     assert np.allclose(got, expected, atol=1e-12, rtol=1e-12)
-    # with cached pieces
-    got_cached = apply_siginv_to_matrix(M, F, D, Dinv=Dinv, C_inv=C_inv)
+    # with cached Dinv
+    got_cached = apply_siginv_to_matrix(M, F, D, Dinv=Dinv, C_chol=C_chol)
     assert np.allclose(got_cached, expected, atol=1e-12, rtol=1e-12)
 
 

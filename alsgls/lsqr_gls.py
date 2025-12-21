@@ -96,13 +96,13 @@ class WoodburyWeight:
     # Public API
     # ------------------------------------------------------------------
     def _apply_m_inv_half(self, cols: np.ndarray) -> np.ndarray:
-        if self._Q is None:
+        if self._Q is None or self._S_diag is None:
             return cols
 
         proj = self._Q.T @ cols
         p_perp = cols - (self._Q @ proj)
         q_term = self._Q @ (self._S_diag[:, None] * proj)
-        return p_perp + q_term
+        return np.asarray(p_perp + q_term)
 
     def W_apply(self, T: np.ndarray) -> np.ndarray:
         """Apply ``W`` to an ``(N, K)`` array row-by-row."""
@@ -110,7 +110,7 @@ class WoodburyWeight:
         T = np.asarray(T, dtype=float)
         cols = (self._D_isqrt[:, None]) * T.T
         out = self._apply_m_inv_half(cols)
-        return out.T
+        return np.asarray(out.T)
 
     def WT_apply(self, T: np.ndarray) -> np.ndarray:
         """Apply the adjoint ``W.T`` to an ``(N, K)`` array row-by-row."""
@@ -118,7 +118,7 @@ class WoodburyWeight:
         T = np.asarray(T, dtype=float)
         cols = self._apply_m_inv_half(T.T)
         cols = (self._D_isqrt[:, None]) * cols
-        return cols.T
+        return np.asarray(cols.T)
 
 
 class GLSLinearOperator(LinearOperator):

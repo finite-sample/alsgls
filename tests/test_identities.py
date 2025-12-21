@@ -25,8 +25,9 @@ def test_woodbury_matches_dense_right_multiply():
     S_inv = npl.inv(S)
 
     dense = M @ S_inv
-    # Woodbury path (default uses explicit small inverse internally)
-    wb = apply_siginv_to_matrix(M, F, D)
+    # Woodbury path using Cholesky factorization
+    Dinv, C_chol = woodbury_chol(F, D)
+    wb = apply_siginv_to_matrix(M, F, D, C_chol=C_chol)
 
     assert np.allclose(dense, wb, rtol=RTOL, atol=ATOL)
 

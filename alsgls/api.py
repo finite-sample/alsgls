@@ -22,7 +22,7 @@ def _auto_rank(num_equations: int) -> int:
     return max(1, min(8, int(np.ceil(num_equations / 10))))
 
 
-def _asarray_2d(x: Any, *, dtype: np.dtype = np.float64) -> np.ndarray:
+def _asarray_2d(x: Any, *, dtype: Any = np.float64) -> np.ndarray:
     """Convert array-like input to a 2D ``numpy.ndarray``."""
 
     if hasattr(x, "to_numpy"):

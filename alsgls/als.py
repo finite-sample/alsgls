@@ -1,5 +1,10 @@
+from __future__ import annotations
+
+from typing import Any, Callable
+
 import numpy as np
 
+from ._validation import _validate_gls_inputs, _validate_convergence_params
 from .metrics import nll_per_row
 from .ops import (
     XB_from_Blist,
@@ -13,9 +18,9 @@ from .ops import (
 
 
 def als_gls(
-    Xs,
-    Y,
-    k,
+    Xs: list[np.ndarray],
+    Y: np.ndarray,
+    k: int,
     lam_F: float = 1e-3,
     lam_B: float = 1e-3,
     sweeps: int = 8,
@@ -26,7 +31,7 @@ def als_gls(
     scale_correct: bool = True,
     scale_floor: float = 1e-8,
     rel_tol: float = 1e-6,
-):
+) -> tuple[list[np.ndarray], np.ndarray, np.ndarray, float, dict[str, Any]]:
     """
     Alternating-least-squares GLS with low-rank-plus-diagonal covariance.
     Uses Woodbury throughout; never materializes K×K dense Σ.
@@ -70,22 +75,10 @@ def als_gls(
     # ----------------------------
     # Input validation
     # ----------------------------
-    if not isinstance(Xs, list) or len(Xs) == 0:
-        raise ValueError("Xs must be a non-empty list of arrays")
-    if Y.ndim != 2:
-        raise ValueError("Y must be a 2D array")
+    Xs, Y, k, lam_F, lam_B = _validate_gls_inputs(Xs, Y, k, lam_F=lam_F, lam_B=lam_B)
+    conv_params = _validate_convergence_params(sweeps=sweeps, rel_tol=rel_tol, 
+                                             cg_maxit=cg_maxit, cg_tol=cg_tol)
     N, K = Y.shape
-    if len(Xs) != K:
-        raise ValueError(f"Number of X matrices ({len(Xs)}) must match Y columns ({K})")
-    for j, X in enumerate(Xs):
-        if X.ndim != 2 or X.shape[0] != N:
-            raise ValueError(f"X[{j}] must be 2D with {N} rows")
-    if not (1 <= k <= min(K, N)):
-        raise ValueError(f"k must be between 1 and min(K={K}, N={N})")
-    if lam_F < 0 or lam_B < 0:
-        raise ValueError("Regularization parameters must be non-negative")
-    if rel_tol < 0:
-        raise ValueError("rel_tol must be non-negative")
 
     p_list = [X.shape[1] for X in Xs]
 

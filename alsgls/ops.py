@@ -1,24 +1,12 @@
+from __future__ import annotations
+
+from typing import Any, Callable
+
 import numpy as np
 
 
-def woodbury_pieces(F: np.ndarray, D: np.ndarray):
-    """
-    Return (Dinv, C_inv) used in Woodbury for Σ = F F^T + diag(D).
 
-    Σ^{-1} = D^{-1} - D^{-1} F C^{-1} F^T D^{-1},  where C = (I + F^T D^{-1} F).
-    For backward compatibility, this returns the explicit small inverse C_inv.
-    """
-    D = np.asarray(D)
-    Dinv = 1.0 / np.clip(D, 1e-12, None)
-    FtDinv = F.T * Dinv  # k × K (row-scale F^T by Dinv)
-    M = FtDinv @ F  # k × k  == F^T D^{-1} F
-    # Solve small k×k system to get explicit C_inv for callers that expect it
-    C = np.eye(F.shape[1]) + M
-    C_inv = np.linalg.solve(C, np.eye(F.shape[1]))
-    return Dinv, C_inv
-
-
-def woodbury_chol(F: np.ndarray, D: np.ndarray):
+def woodbury_chol(F: np.ndarray, D: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """
     Return (Dinv, C_chol) where C_chol is the Cholesky factor of C = I + F^T D^{-1} F.
 
@@ -61,51 +49,51 @@ def apply_siginv_to_matrix(
     D: np.ndarray,
     *,
     Dinv: np.ndarray | None = None,
-    C_inv: np.ndarray | None = None,
-    C_chol: np.ndarray | None = None,
+    C_chol: np.ndarray,
 ) -> np.ndarray:
     """
     Right-multiply an (N×K) matrix M by Σ^{-1} using Woodbury, where
     Σ = F F^T + diag(D).
 
-    You may pass either C_inv (explicit inverse of I + F^T D^{-1} F) or
-    C_chol (its Cholesky factor). If neither is provided, a small explicit
-    inverse will be computed internally for convenience.
+    Uses numerically stable Cholesky factorization approach.
+    
+    Parameters
+    ----------
+    M : np.ndarray
+        (N×K) matrix to right-multiply by Σ^{-1}
+    F : np.ndarray
+        (K×k) factor loadings matrix
+    D : np.ndarray
+        (K,) diagonal noise variances
+    Dinv : np.ndarray, optional
+        Pre-computed 1/D. If None, computed from D.
+    C_chol : np.ndarray
+        Cholesky factor of C = I + F^T D^{-1} F
+        
+    Returns
+    -------
+    np.ndarray
+        M @ Σ^{-1}
     """
     if Dinv is None:
         Dinv = 1.0 / np.clip(np.asarray(D), 1e-12, None)
 
-    if C_chol is not None:
-        # Numerically stable path with Cholesky solves (preferred)
-        MDinv = M * Dinv[None, :]
-        T1 = MDinv @ F  # (N × k)
-        # Compute T2 = T1 @ C^{-1} without forming C^{-1}
-        # Solve C Z^T = T1^T  ->  Z^T = C^{-1} T1^T  ->  T2 = Z^T
-        ZT = _right_solve_with_C(T1.T, C_chol)  # (k × N)
-        T2 = ZT.T
-        T3 = T2 @ (F.T * Dinv)  # (N × K)
-        return MDinv - T3
-
-    # Fallback to explicit inverse if provided (or compute it)
-    if C_inv is None:
-        Dinv_tmp, C_inv = woodbury_pieces(F, D)
-        # If caller provided Dinv, prefer it (they may have a cached copy)
-        if Dinv is None:
-            Dinv = Dinv_tmp
-
     MDinv = M * Dinv[None, :]
     T1 = MDinv @ F  # (N × k)
-    T2 = T1 @ C_inv  # (N × k)
+    # Compute T2 = T1 @ C^{-1} without forming C^{-1}
+    # Solve C Z^T = T1^T  ->  Z^T = C^{-1} T1^T  ->  T2 = Z^T
+    ZT = _right_solve_with_C(T1.T, C_chol)  # (k × N)
+    T2 = ZT.T
     T3 = T2 @ (F.T * Dinv)  # (N × K)
-    return MDinv - T3
+    return np.asarray(MDinv - T3)
 
 
-def stack_B_list(B_list):
+def stack_B_list(B_list: list[np.ndarray]) -> np.ndarray:
     """Stack list of (p_j×1) blocks into a flat vector."""
     return np.concatenate([b.ravel() for b in B_list], axis=0)
 
 
-def unstack_B_vec(bvec, p_list):
+def unstack_B_vec(bvec: np.ndarray, p_list: list[int]) -> list[np.ndarray]:
     """Inverse of stack: vector -> list of (p_j×1)."""
     out, i = [], 0
     for p in p_list:
@@ -114,12 +102,19 @@ def unstack_B_vec(bvec, p_list):
     return out
 
 
-def XB_from_Blist(Xs, B_list):
+def XB_from_Blist(Xs: list[np.ndarray], B_list: list[np.ndarray]) -> np.ndarray:
     """Return N × K matrix of predictions."""
     return np.column_stack([Xs[j] @ B_list[j] for j in range(len(Xs))])
 
 
-def cg_solve(operator_mv, b, x0=None, maxit=500, tol=1e-7, M_pre=None):
+def cg_solve(
+    operator_mv: Callable[[np.ndarray], np.ndarray], 
+    b: np.ndarray, 
+    x0: np.ndarray | None = None, 
+    maxit: int = 500, 
+    tol: float = 1e-7, 
+    M_pre: Callable[[np.ndarray], np.ndarray] | None = None
+) -> tuple[np.ndarray, dict[str, Any]]:
     """
     Conjugate gradient for SPD operator A (matrix-free).
 
@@ -158,7 +153,11 @@ def cg_solve(operator_mv, b, x0=None, maxit=500, tol=1e-7, M_pre=None):
         Ap = operator_mv(p)
         pAp = float(p @ Ap)
         if pAp <= 0:
-            raise ValueError("Operator is not SPD: p^T A p ≤ 0")
+            raise ValueError(
+                "Operator is not positive definite: p^T A p ≤ 0. "
+                "This may indicate numerical issues or incorrectly specified problem. "
+                "Try increasing regularization (lam_F, lam_B) or check input data for singularities."
+            )
 
         alpha = rz_old / pAp
         x += alpha * p
@@ -171,7 +170,11 @@ def cg_solve(operator_mv, b, x0=None, maxit=500, tol=1e-7, M_pre=None):
         z = M_pre(r) if M_pre is not None else r
         rz_new = float(r @ z)
         if rz_old <= 0:
-            raise ValueError("Preconditioner is not SPD: r^T z ≤ 0")
+            raise ValueError(
+                "Preconditioner is not positive definite: r^T z ≤ 0. "
+                "This indicates a problem with the preconditioner. "
+                "Try disabling preconditioning (M_pre=None) or using simpler preconditioning."
+            )
         beta = rz_new / rz_old
         p = z + beta * p
         rz_old = rz_new
@@ -195,4 +198,4 @@ def siginv_diag(F: np.ndarray, Dinv: np.ndarray, C_chol: np.ndarray) -> np.ndarr
     # Row-wise quadratic forms f_j^T C^{-1} f_j  =  sum over k of (F * (C^{-1} F^T)^T)
     row_q = np.sum(F * Cinv_Ft.T, axis=1)  # (K,)
     diag_Sinv = Dinv - (Dinv**2) * row_q
-    return diag_Sinv
+    return np.asarray(diag_Sinv)

@@ -1,14 +1,16 @@
+from __future__ import annotations
+
 import numpy as np
 
 from .ops import apply_siginv_to_matrix, woodbury_chol
 
 
-def mse(Y, Yhat):
+def mse(Y: np.ndarray, Yhat: np.ndarray) -> float:
     """Mean squared error between two matrices."""
     return float(np.mean((Y - Yhat) ** 2))
 
 
-def nll_per_row(R, F, D):
+def nll_per_row(R: np.ndarray, F: np.ndarray, D: np.ndarray) -> float:
     """
     Negative log-likelihood per row for residual matrix ``R`` under
     Σ = F F^T + diag(D) with Gaussian errors.
@@ -33,4 +35,4 @@ def nll_per_row(R, F, D):
     logdet_core = 2.0 * float(np.sum(np.log(np.diag(C_chol))))
     logdet = logdet_D + logdet_core
 
-    return 0.5 * (quad / N + logdet + K * np.log(2.0 * np.pi))
+    return float(0.5 * (quad / N + logdet + K * np.log(2.0 * np.pi)))
