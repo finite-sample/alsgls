@@ -82,7 +82,6 @@ def load_ff_factors():
             end_idx = i
             break
 
-    header = lines[start_idx].split(",")
     data_lines = lines[start_idx + 1 : end_idx]
 
     records = []
@@ -127,12 +126,12 @@ def main():
     Xs = [X_common.copy() for _ in range(K)]
 
     print(f"\nProblem size: N={N} observations, K={K} equations, p=4 features")
-    print(f"Fitting ALS-GLS with BIC rank selection...")
+    print("Fitting ALS-GLS with BIC rank selection...")
 
     est = ALSGLS(rank="bic", rank_candidates=list(range(1, 10)), max_sweeps=15)
     est.fit(Xs, Y)
 
-    print(f"\n--- Results ---")
+    print("\n--- Results ---")
     print(f"Selected rank: k={est.rank_}")
     print(f"Final NLL per row: {est.info_['nll_trace'][-1]:.4f}")
     print(f"Number of sweeps: {len(est.info_['nll_trace']) - 1}")
@@ -144,7 +143,7 @@ def main():
 
     F = est.F_
     print(f"\nFactor loadings F: {F.shape}")
-    print(f"Top 5 industries loading on factor 1:")
+    print("Top 5 industries loading on factor 1:")
     top_f1 = np.argsort(np.abs(F[:, 0]))[-5:][::-1]
     for i in top_f1:
         print(f"  {ind.columns[i]}: {F[i, 0]:.3f}")

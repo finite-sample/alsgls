@@ -1,7 +1,6 @@
 """Tests for gradient-based F-update."""
 
 import numpy as np
-import pytest
 
 from alsgls import als_gls, nll_per_row, simulate_sur
 from alsgls.ops import grad_F_nll, woodbury_chol
