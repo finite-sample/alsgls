@@ -64,7 +64,13 @@ def select_rank_bic(
             n_params = K * (k + 1) + k
             bic = N * nll + (n_params / 2) * np.log(N)
             results.append(
-                {"k": k, "nll": nll, "bic": bic, "n_params": n_params, "converged": True}
+                {
+                    "k": k,
+                    "nll": nll,
+                    "bic": bic,
+                    "n_params": n_params,
+                    "converged": True,
+                }
             )
         except Exception:
             results.append({"k": k, "nll": np.inf, "bic": np.inf, "converged": False})

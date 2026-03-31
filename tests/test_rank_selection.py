@@ -67,8 +67,12 @@ class TestSelectRankCV:
 
     def test_reproducible_with_seed(self):
         Xs, Y, _, _ = _small_sur_data()
-        k1, _ = select_rank_cv(Xs, Y, k_candidates=[1, 2, 3], n_folds=3, random_state=42)
-        k2, _ = select_rank_cv(Xs, Y, k_candidates=[1, 2, 3], n_folds=3, random_state=42)
+        k1, _ = select_rank_cv(
+            Xs, Y, k_candidates=[1, 2, 3], n_folds=3, random_state=42
+        )
+        k2, _ = select_rank_cv(
+            Xs, Y, k_candidates=[1, 2, 3], n_folds=3, random_state=42
+        )
         assert k1 == k2
 
     def test_invalid_n_folds(self):

@@ -40,7 +40,9 @@ class TestGradFNll:
         grad_analytical = grad_F_nll(R, F, D, Dinv, C_chol, lam_F)
         grad_numerical = _finite_diff_grad_F(R, F, D, lam_F)
 
-        np.testing.assert_allclose(grad_analytical, grad_numerical, rtol=1e-4, atol=1e-6)
+        np.testing.assert_allclose(
+            grad_analytical, grad_numerical, rtol=1e-4, atol=1e-6
+        )
 
     def test_gradient_zero_at_optimum(self):
         """Gradient should be near zero when F is optimal."""

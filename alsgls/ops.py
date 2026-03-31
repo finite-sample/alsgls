@@ -201,9 +201,7 @@ def siginv_diag(F: np.ndarray, Dinv: np.ndarray, C_chol: np.ndarray) -> np.ndarr
     return np.asarray(diag_Sinv)
 
 
-def apply_siginv_F(
-    F: np.ndarray, Dinv: np.ndarray, C_chol: np.ndarray
-) -> np.ndarray:
+def apply_siginv_F(F: np.ndarray, Dinv: np.ndarray, C_chol: np.ndarray) -> np.ndarray:
     """
     Compute Σ^{-1} @ F efficiently using Woodbury.
 

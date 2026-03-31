@@ -53,7 +53,9 @@ def load_ff_49_industries():
         date_str = parts[0].strip()
         if len(date_str) != 6:
             continue
-        vals = [float(x) if x.strip() and x.strip() != "" else np.nan for x in parts[1:]]
+        vals = [
+            float(x) if x.strip() and x.strip() != "" else np.nan for x in parts[1:]
+        ]
         records.append([date_str] + vals)
 
     df = pd.DataFrame(records, columns=["date"] + [h.strip() for h in header[1:]])
@@ -165,7 +167,9 @@ def main():
     off_diag_gls = (corr_gls.sum() - K) / (K * (K - 1))
     print(f"GLS residual avg off-diagonal correlation: {off_diag_gls:.3f}")
 
-    print("\nALS-GLS captures cross-equation correlation via low-rank factor structure.")
+    print(
+        "\nALS-GLS captures cross-equation correlation via low-rank factor structure."
+    )
 
 
 if __name__ == "__main__":
