@@ -44,6 +44,28 @@ sys_results = sys_model.fit()
 params = sys_results.params_as_series()  # pandas optional
 ```
 
+### Rank Selection
+
+The package supports automatic rank selection via BIC or cross-validation:
+
+```python
+from alsgls import ALSGLS
+
+# BIC-based rank selection
+est = ALSGLS(rank="bic", max_sweeps=15)
+est.fit(Xs, Y)
+print(f"Selected rank: {est.rank_}")
+
+# Cross-validation rank selection
+est = ALSGLS(rank="cv", cv_folds=5, cv_random_state=42)
+est.fit(Xs, Y)
+print(f"Selected rank: {est.rank_}")
+```
+
+### Real Data Example
+
+See `examples/real_data_fama_french.py` for a demonstration using Fama-French 49 industry portfolios.
+
 The `benchmarks/compare_sur.py` script contrasts ALS-GLS with `statsmodels` and
 `linearmodels` SUR implementations on matched simulation grids while recording
 peak memory (via Memray, Fil, or the POSIX RSS high-water mark).
@@ -56,12 +78,17 @@ Background material and reproducible experiments are available in the notebooks 
 
 This package provides a modern, type-safe implementation of **Alternating-Least-Squares (ALS)** for low-rank GLS problems. The Woodbury identity reduces the expensive inverse to a tiny k × k system, and the β-update can be written without explicitly forming dense matrices. 
 
-**Key features in v1.0:**
+**New in v1.1.0:**
+- **Rank selection**: BIC and cross-validation for automatic rank selection
+- **Gradient-based factor update**: Cleaner theory, same convergence guarantees
+- **Real-world example**: Fama-French 49 industry portfolios demonstration
+- **Formal methods documentation**: Rigorous mathematical foundations
+
+**Core features:**
 - **Full type safety** with mypy compliance and comprehensive type hints
 - **Numerically stable** implementation using Cholesky factorization throughout
 - **Clean API** with single computational path and enhanced error messages
 - **Memory efficient** with O(K k) complexity, converging in 5–6 sweeps
-- **Breaking changes** for a cleaner, more maintainable codebase
 
 **Rule of thumb:** if your GLS routine keeps looping between $\beta$ and a fresh $\hat{\Sigma}$, the ALS approach yields the same statistical fit with an order‑of‑magnitude smaller memory footprint and better numerical stability.
 
@@ -73,11 +100,11 @@ Random‑effects models, feasible GLS with estimated heteroskedastic weights, op
 
 To demonstrate performance, we benchmark ALS against traditional methods with N = 300 observations, three regressors, rank‑3 factors, and K ranging from 50 to 120 equations. The largest array that traditional methods need is the dense Σ⁻¹ (K×K), whereas ALS's largest is the skinny factor matrix F (K×k).
 
-|   K | β‑RMSE Traditional | β‑RMSE ALS | Peak MB Traditional | Peak MB ALS | Memory ratio |
-| --: | :----------------: | :--------: | ------------------: | ----------: | -----------: |
-|  50 |       0.021        |    0.021   |               0.020 |       0.002 |         10×  |
-|  80 |       0.020        |    0.020   |               0.051 |       0.003 |         17×  |
-| 120 |       0.020        |    0.020   |               0.115 |       0.004 |         29×  |
+|   K | β‑RMSE EM | β‑RMSE ALS | Peak MB EM | Peak MB ALS | Memory ratio |
+| --: | :-------: | :--------: | ---------: | ----------: | -----------: |
+|  50 |   0.021   |    0.021   |     0.020  |      0.002  |         10×  |
+|  80 |   0.020   |    0.020   |     0.051  |      0.003  |         17×  |
+| 120 |   0.020   |    0.020   |     0.115  |      0.004  |         29×  |
 
 The ALS implementation achieves the same statistical performance while using only a few megabytes of memory, providing substantial computational advantages for large systems.
 
