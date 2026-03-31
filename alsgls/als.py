@@ -10,6 +10,7 @@ from .ops import (
     XB_from_Blist,
     apply_siginv_to_matrix,
     cg_solve,
+    grad_F_nll,
     siginv_diag,
     stack_B_list,
     unstack_B_vec,
@@ -177,12 +178,17 @@ def als_gls(
             R = Y - XB_from_Blist(Xs, B)
             base_nll = nll_prev  # true baseline for this sweep
 
-        # --- Propose U,F,D updates (unconstrained proposal)
-        FtF = F.T @ F + lam_F * np.eye(F.shape[1])
-        U_prop = np.linalg.solve(FtF, (R @ F).T).T  # N × k
-        UtU = U_prop.T @ U_prop + lam_F * np.eye(F.shape[1])
-        F_prop = np.linalg.solve(UtU, U_prop.T @ R).T  # K × k
-        D_prop = np.maximum(np.mean((R - U_prop @ F_prop.T) ** 2, axis=0), d_floor)
+        # --- Gradient-based F update
+        # Compute gradient of NLL w.r.t. F
+        grad_F = grad_F_nll(R, F, D, Dinv, C_chol, lam_F)
+
+        # Steepest descent direction
+        F_prop = F - grad_F  # Step size handled in backtracking
+
+        # D update: MLE estimate diag(S - F F^T) where S = R^T R / N
+        diag_S = np.sum(R**2, axis=0) / N
+        diag_FFt = np.sum(F_prop**2, axis=1)
+        D_prop = np.maximum(diag_S - diag_FFt, d_floor)
 
         # Guarded scale correction helper (applied to a candidate F,D)
         def try_with_scale(F_try, D_try):

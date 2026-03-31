@@ -2,6 +2,7 @@ from .als import als_gls
 from .api import ALSGLS, ALSGLSSystem, ALSGLSSystemResults
 from .metrics import mse, nll_per_row
 from .ops import XB_from_Blist
+from .rank_selection import select_rank_bic, select_rank_cv
 from .sim import simulate_gls, simulate_sur
 
 __all__ = [
@@ -12,6 +13,8 @@ __all__ = [
     "als_gls",
     "mse",
     "nll_per_row",
+    "select_rank_bic",
+    "select_rank_cv",
     "simulate_gls",
     "simulate_sur",
 ]

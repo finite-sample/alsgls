@@ -41,8 +41,10 @@ nll = nll_per_row(Y_te - Yhat_te, F, D)
 
 quickstart
 mathematical_background
+formal_methods
 als_vs_em
 examples
+real_world_applications
 ```
 
 ```{toctree}

@@ -11,6 +11,7 @@ import numpy as np
 from .als import als_gls
 from .metrics import nll_per_row
 from .ops import XB_from_Blist
+from .rank_selection import select_rank_bic, select_rank_cv
 
 
 def _auto_rank(num_equations: int) -> int:
@@ -50,12 +51,32 @@ def _eq_name(name: Any, index: int) -> str:
 
 
 class ALSGLS:
-    """Scikit-learn style estimator for low-rank GLS via ALS."""
+    """Scikit-learn style estimator for low-rank GLS via ALS.
+
+    Parameters
+    ----------
+    rank : int, str, or None
+        Rank of the low-rank factor structure. Options:
+        - int: Fixed rank value
+        - "auto": Heuristic based on K (default)
+        - "bic": Select via BIC minimization
+        - "cv": Select via cross-validation
+        - None: Same as "auto"
+    rank_candidates : list of int, optional
+        Candidate ranks for "bic" or "cv" selection.
+    cv_folds : int
+        Number of folds for "cv" rank selection.
+    cv_random_state : int or None
+        Random state for CV fold splits.
+    """
 
     def __init__(
         self,
         *,
         rank: int | str | None = "auto",
+        rank_candidates: list[int] | None = None,
+        cv_folds: int = 5,
+        cv_random_state: int | None = None,
         lam_F: float = 1e-3,
         lam_B: float = 1e-3,
         max_sweeps: int = 12,
@@ -67,6 +88,9 @@ class ALSGLS:
         scale_floor: float = 1e-8,
     ) -> None:
         self.rank = rank
+        self.rank_candidates = rank_candidates
+        self.cv_folds = cv_folds
+        self.cv_random_state = cv_random_state
         self.lam_F = lam_F
         self.lam_B = lam_B
         self.max_sweeps = max_sweeps
@@ -80,9 +104,12 @@ class ALSGLS:
     # ------------------------------------------------------------------
     # Scikit-learn estimator protocol
     # ------------------------------------------------------------------
-    def get_params(self, deep: bool = True) -> dict[str, Any]:  # noqa: D401 - sklearn API
+    def get_params(self, deep: bool = True) -> dict[str, Any]:  # noqa: ARG002, D401
         return {
             "rank": self.rank,
+            "rank_candidates": self.rank_candidates,
+            "cv_folds": self.cv_folds,
+            "cv_random_state": self.cv_random_state,
             "lam_F": self.lam_F,
             "lam_B": self.lam_B,
             "max_sweeps": self.max_sweeps,
@@ -104,6 +131,20 @@ class ALSGLS:
     # ------------------------------------------------------------------
     # Fitting / inference
     # ------------------------------------------------------------------
+    def _als_kwargs(self) -> dict[str, Any]:
+        """Common kwargs for als_gls calls."""
+        return {
+            "lam_F": self.lam_F,
+            "lam_B": self.lam_B,
+            "sweeps": self.max_sweeps,
+            "d_floor": self.d_floor,
+            "cg_maxit": self.cg_maxit,
+            "cg_tol": self.cg_tol,
+            "scale_correct": self.scale_correct,
+            "scale_floor": self.scale_floor,
+            "rel_tol": self.rel_tol,
+        }
+
     def fit(self, Xs: Sequence[Any], Y: Any) -> ALSGLS:
         X_list = [_asarray_2d(X) for X in Xs]
         Y_arr = _asarray_2d(Y)
@@ -118,7 +159,22 @@ class ALSGLS:
             if X.shape[0] != N:
                 raise ValueError(f"X[{j}] has {X.shape[0]} rows but Y has {N}")
 
-        if self.rank == "auto" or self.rank is None:
+        rank_selection_results: list[dict[str, Any]] | None = None
+
+        if self.rank == "bic":
+            k, rank_selection_results = select_rank_bic(
+                X_list, Y_arr, k_candidates=self.rank_candidates, **self._als_kwargs()
+            )
+        elif self.rank == "cv":
+            k, rank_selection_results = select_rank_cv(
+                X_list,
+                Y_arr,
+                k_candidates=self.rank_candidates,
+                n_folds=self.cv_folds,
+                random_state=self.cv_random_state,
+                **self._als_kwargs(),
+            )
+        elif self.rank == "auto" or self.rank is None:
             k = _auto_rank(K)
         else:
             k = int(self.rank)
@@ -126,20 +182,7 @@ class ALSGLS:
         if not (1 <= k <= min(K, N)):
             raise ValueError(f"rank must be in [1, min(K={K}, N={N})]")
 
-        B_list, F, D, mem_mb, info = als_gls(
-            X_list,
-            Y_arr,
-            k=k,
-            lam_F=self.lam_F,
-            lam_B=self.lam_B,
-            sweeps=self.max_sweeps,
-            d_floor=self.d_floor,
-            cg_maxit=self.cg_maxit,
-            cg_tol=self.cg_tol,
-            scale_correct=self.scale_correct,
-            scale_floor=self.scale_floor,
-            rel_tol=self.rel_tol,
-        )
+        B_list, F, D, mem_mb, info = als_gls(X_list, Y_arr, k=k, **self._als_kwargs())
 
         self.B_list_ = B_list
         self.F_ = F
@@ -150,6 +193,7 @@ class ALSGLS:
         self.n_targets_ = K
         self.n_obs_ = N
         self.rank_ = k
+        self.rank_selection_results_ = rank_selection_results
         self.training_residuals_ = Y_arr - XB_from_Blist(X_list, B_list)
         self.is_fitted_ = True
         return self

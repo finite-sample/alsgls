@@ -199,3 +199,101 @@ def siginv_diag(F: np.ndarray, Dinv: np.ndarray, C_chol: np.ndarray) -> np.ndarr
     row_q = np.sum(F * Cinv_Ft.T, axis=1)  # (K,)
     diag_Sinv = Dinv - (Dinv**2) * row_q
     return np.asarray(diag_Sinv)
+
+
+def apply_siginv_F(
+    F: np.ndarray, Dinv: np.ndarray, C_chol: np.ndarray
+) -> np.ndarray:
+    """
+    Compute Σ^{-1} @ F efficiently using Woodbury.
+
+    Σ^{-1} @ F = D^{-1} F - D^{-1} F C^{-1} F^T D^{-1} F
+
+    Parameters
+    ----------
+    F : (K, k) array
+        Factor loadings
+    Dinv : (K,) array
+        Inverse diagonal
+    C_chol : (k, k) array
+        Cholesky factor of C = I + F^T D^{-1} F
+
+    Returns
+    -------
+    SinvF : (K, k) array
+        Σ^{-1} @ F
+    """
+    # D^{-1} F
+    DinvF = Dinv[:, None] * F  # K × k
+
+    # F^T D^{-1} F
+    FtDinvF = F.T @ DinvF  # k × k
+
+    # C^{-1} (F^T D^{-1} F)
+    Cinv_FtDinvF = _right_solve_with_C(FtDinvF, C_chol)  # k × k
+
+    # D^{-1} F C^{-1} F^T D^{-1} F
+    correction = DinvF @ Cinv_FtDinvF  # K × k
+
+    return np.asarray(DinvF - correction)
+
+
+def grad_F_nll(
+    R: np.ndarray,
+    F: np.ndarray,
+    D: np.ndarray,
+    Dinv: np.ndarray,
+    C_chol: np.ndarray,
+    lam_F: float = 0.0,
+) -> np.ndarray:
+    """
+    Compute gradient of NLL w.r.t. F using Woodbury algebra.
+
+    The NLL is: L = 0.5 * [tr(R Σ^{-1} R^T)/N + log|Σ| + K log(2π)]
+
+    The gradient (derived via matrix calculus) is:
+        ∂L/∂F = Σ^{-1} F - Σ^{-1} S Σ^{-1} F + λ_F * F
+
+    where S = R^T R / N is the sample covariance.
+
+    Parameters
+    ----------
+    R : (N, K) array
+        Residual matrix
+    F : (K, k) array
+        Factor loadings
+    D : (K,) array
+        Diagonal variances (used for Σ = F F^T + diag(D))
+    Dinv : (K,) array
+        Pre-computed 1/D
+    C_chol : (k, k) array
+        Cholesky factor of C = I + F^T D^{-1} F
+    lam_F : float
+        Ridge penalty on F
+
+    Returns
+    -------
+    grad : (K, k) array
+        Gradient of NLL w.r.t. F
+    """
+    N, _ = R.shape
+
+    # Sample covariance S = R^T R (not divided by N yet, will divide later)
+    S = R.T @ R  # K × K
+
+    # Σ^{-1} F
+    SigmaInvF = apply_siginv_F(F, Dinv, C_chol)  # K × k
+
+    # Need Σ^{-1} @ S, but apply_siginv_to_matrix computes M @ Σ^{-1}
+    # Since both Σ^{-1} and S are symmetric: Σ^{-1} @ S = (S @ Σ^{-1})^T
+    S_SigmaInv = apply_siginv_to_matrix(S, F, D, Dinv=Dinv, C_chol=C_chol)  # S @ Σ^{-1}
+    SigmaInv_S = S_SigmaInv.T  # Σ^{-1} @ S (K × K)
+
+    # Σ^{-1} S Σ^{-1} F
+    SigmaInv_S_SigmaInvF = SigmaInv_S @ SigmaInvF  # K × k
+
+    # Gradient: Σ^{-1} F - (1/N) Σ^{-1} S Σ^{-1} F + λ_F * F
+    # where S = R^T R (not divided by N)
+    grad = SigmaInvF - (1.0 / N) * SigmaInv_S_SigmaInvF + lam_F * F
+
+    return np.asarray(grad)

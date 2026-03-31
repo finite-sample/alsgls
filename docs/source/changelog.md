@@ -5,6 +5,22 @@ All notable changes to alsgls will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2025-03-31
+
+### New Features
+- **Rank selection methods**: `rank="bic"` and `rank="cv"` for automatic rank selection
+- **Real data example**: Fama-French 49 industry portfolios demonstration
+- **Formal methods documentation**: Rigorous mathematical foundations
+
+### Improvements
+- Replaced heuristic ALS F-update with gradient-based descent
+- Added `select_rank_bic()` and `select_rank_cv()` functions
+- New parameters: `rank_candidates`, `cv_folds`, `cv_random_state`
+
+### Documentation
+- New `formal_methods.md` with convergence proofs and complexity analysis
+- New `real_world_applications.md` with finance example
+
 ## [1.0.0] - 2024-12-21
 
 ### 🚨 BREAKING CHANGES
@@ -85,6 +101,8 @@ This is a major release with significant API changes that improve type safety, p
 - MSE and NLL metrics
 - Example scripts
 
+[1.1.0]: https://github.com/finite-sample/alsgls/compare/v1.0.0...v1.1.0
+[1.0.0]: https://github.com/finite-sample/alsgls/compare/v0.3.0...v1.0.0
 [0.3.0]: https://github.com/finite-sample/alsgls/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/finite-sample/alsgls/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/finite-sample/alsgls/releases/tag/v0.1.0
