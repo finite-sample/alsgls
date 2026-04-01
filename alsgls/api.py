@@ -7,10 +7,11 @@ from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
+from scipy import stats
 
 from .als import als_gls
 from .metrics import nll_per_row
-from .ops import XB_from_Blist
+from .ops import XB_from_Blist, compute_prediction_variance, compute_XtSigmaInvX
 from .rank_selection import select_rank_bic, select_rank_cv
 
 
@@ -195,6 +196,7 @@ class ALSGLS:
         self.rank_ = k
         self.rank_selection_results_ = rank_selection_results
         self.training_residuals_ = Y_arr - XB_from_Blist(X_list, B_list)
+        self._training_Xs = X_list
         self.is_fitted_ = True
         return self
 
@@ -224,6 +226,131 @@ class ALSGLS:
             raise ValueError("Predictions and Y have incompatible shapes")
         residual = Y_arr - preds
         return -float(nll_per_row(residual, self.F_, self.D_))
+
+    @property
+    def cov_params_(self) -> np.ndarray:
+        """Variance-covariance matrix of parameter estimates."""
+        self._ensure_fitted()
+        if not hasattr(self, "_cov_params_cache"):
+            Xs = [np.zeros((self.n_obs_, p)) for p in self.n_features_in_]
+            Xs = getattr(self, "_training_Xs", None)
+            if Xs is None:
+                raise RuntimeError(
+                    "Training design matrices not stored. "
+                    "cov_params_ requires re-fitting or use ALSGLSSystem."
+                )
+            XtSinvX = compute_XtSigmaInvX(Xs, self.F_, self.D_, lam_B=self.lam_B)
+            self._cov_params_cache = np.linalg.inv(XtSinvX)
+        return self._cov_params_cache
+
+    def predict_interval(
+        self,
+        Xs: Sequence[Any],
+        alpha: float = 0.05,
+        return_type: str = "prediction",
+    ) -> dict[str, np.ndarray]:
+        """Compute prediction or confidence intervals for new observations.
+
+        Parameters
+        ----------
+        Xs : Sequence
+            List of design matrices [X_0, ..., X_{K-1}] for new observations.
+        alpha : float
+            Significance level (default 0.05 for 95% intervals).
+        return_type : str
+            "prediction" for prediction intervals (includes residual variance),
+            "confidence" for confidence intervals (variance of E[y|X] only).
+
+        Returns
+        -------
+        dict
+            {"mean": (N, K), "lower": (N, K), "upper": (N, K)}
+        """
+        self._ensure_fitted()
+
+        if return_type not in ("prediction", "confidence"):
+            raise ValueError("return_type must be 'prediction' or 'confidence'")
+
+        X_list = [_asarray_2d(X) for X in Xs]
+        if len(X_list) != len(self.B_list_):
+            raise ValueError("Number of design matrices does not match fitted model")
+        for j, (X, B) in enumerate(zip(X_list, self.B_list_, strict=False)):
+            if X.shape[1] != B.shape[0]:
+                raise ValueError(
+                    f"X[{j}] has {X.shape[1]} columns but expected {B.shape[0]}"
+                )
+
+        mean = XB_from_Blist(X_list, self.B_list_)
+        include_residual = return_type == "prediction"
+        variance = compute_prediction_variance(
+            X_list,
+            self.F_,
+            self.D_,
+            self.cov_params_,
+            include_residual=include_residual,
+        )
+
+        df = self.n_obs_ - sum(self.n_features_in_)
+        df = max(df, 1)
+        q = stats.t.ppf(1 - alpha / 2, df)
+        se = np.sqrt(np.maximum(variance, 0.0))
+
+        return {
+            "mean": mean,
+            "lower": mean - q * se,
+            "upper": mean + q * se,
+        }
+
+
+@dataclass
+class PredictionResults:
+    """Container for prediction results with intervals."""
+
+    predicted_mean: np.ndarray
+    se_mean: np.ndarray
+    se_obs: np.ndarray
+    _df: int
+    _alpha_default: float = 0.05
+
+    def conf_int_mean(self, alpha: float | None = None) -> np.ndarray:
+        """Confidence intervals for E[y|X].
+
+        Parameters
+        ----------
+        alpha : float, optional
+            Significance level (default 0.05 for 95% CI)
+
+        Returns
+        -------
+        ci : np.ndarray
+            (N, K, 2) array with lower and upper bounds
+        """
+        if alpha is None:
+            alpha = self._alpha_default
+        q = stats.t.ppf(1 - alpha / 2, self._df)
+        lower = self.predicted_mean - q * self.se_mean
+        upper = self.predicted_mean + q * self.se_mean
+        return np.stack([lower, upper], axis=-1)
+
+    def conf_int_obs(self, alpha: float | None = None) -> np.ndarray:
+        """Prediction intervals for y|X (includes residual variance).
+
+        Parameters
+        ----------
+        alpha : float, optional
+            Significance level (default 0.05 for 95% CI)
+
+        Returns
+        -------
+        ci : np.ndarray
+            (N, K, 2) array with lower and upper bounds
+        """
+        if alpha is None:
+            alpha = self._alpha_default
+        q = stats.t.ppf(1 - alpha / 2, self._df)
+        lower = self.predicted_mean - q * self.se_obs
+        upper = self.predicted_mean + q * self.se_obs
+        return np.stack([lower, upper], axis=-1)
 
 
 @dataclass
@@ -394,3 +521,171 @@ class ALSGLSSystemResults:
             "nll_per_row": self.nll_per_row,
             "loglike": self.loglike,
         }
+
+    @property
+    def cov_params(self) -> np.ndarray:
+        """Variance-covariance matrix of parameter estimates.
+
+        Computed as (X'Σ⁻¹X + λI)⁻¹ using the Woodbury identity.
+        """
+        if not hasattr(self, "_cov_params"):
+            Xs = [eq.X for eq in self.model._equations]
+            lam_B = self.model.lam_B
+            XtSinvX = compute_XtSigmaInvX(Xs, self.F, self.D, lam_B=lam_B)
+            self._cov_params = np.linalg.inv(XtSinvX)
+        return self._cov_params
+
+    @property
+    def bse(self) -> np.ndarray:
+        """Standard errors of parameter estimates (sqrt of diagonal of cov_params)."""
+        return np.sqrt(np.maximum(np.diag(self.cov_params), 0.0))
+
+    @property
+    def tvalues(self) -> np.ndarray:
+        """t-statistics for H₀: β = 0."""
+        se = self.bse
+        with np.errstate(divide="ignore", invalid="ignore"):
+            t = np.where(se > 0, self.params / se, 0.0)
+        return t
+
+    @property
+    def pvalues(self) -> np.ndarray:
+        """Two-sided p-values for H₀: β = 0."""
+        df = self.model.nobs - len(self.params)
+        df = max(df, 1)
+        return 2.0 * stats.t.sf(np.abs(self.tvalues), df)
+
+    def conf_int(self, alpha: float = 0.05) -> np.ndarray:
+        """Confidence intervals for parameters.
+
+        Parameters
+        ----------
+        alpha : float
+            Significance level (default 0.05 for 95% CI)
+
+        Returns
+        -------
+        ci : np.ndarray
+            (n_params, 2) array with lower and upper bounds
+        """
+        df = self.model.nobs - len(self.params)
+        df = max(df, 1)
+        q = stats.t.ppf(1 - alpha / 2, df)
+        se = self.bse
+        lower = self.params - q * se
+        upper = self.params + q * se
+        return np.column_stack([lower, upper])
+
+    def get_prediction(
+        self,
+        exog: Mapping[Any, Any] | Sequence[Any] | None = None,
+        alpha: float = 0.05,
+    ) -> PredictionResults:
+        """Get prediction results with standard errors and intervals.
+
+        Parameters
+        ----------
+        exog : Mapping, Sequence, or None
+            Design matrices for new observations. If None, uses training data.
+            Can be a dict {eq_name: X_j} or list [X_0, ..., X_{K-1}].
+        alpha : float
+            Default significance level for intervals (default 0.05).
+
+        Returns
+        -------
+        PredictionResults
+            Object with predicted_mean, se_mean, se_obs, and interval methods.
+        """
+        if exog is None:
+            Xs = [eq.X for eq in self.model._equations]
+        else:
+            if isinstance(exog, Mapping):
+                items = [exog[eq.name] for eq in self.model._equations]
+            else:
+                items = list(exog)
+            if len(items) != len(self.model._equations):
+                raise ValueError("Expected design matrices for all equations")
+            Xs = []
+            for item, eq in zip(items, self.model._equations, strict=False):
+                arr = _asarray_2d(item)
+                if arr.shape[1] != eq.X.shape[1]:
+                    raise ValueError("Design matrix has incompatible number of columns")
+                Xs.append(arr)
+
+        predicted_mean = XB_from_Blist(Xs, self.B_list)
+
+        var_mean = compute_prediction_variance(
+            Xs, self.F, self.D, self.cov_params, include_residual=False
+        )
+        var_obs = compute_prediction_variance(
+            Xs, self.F, self.D, self.cov_params, include_residual=True
+        )
+
+        se_mean = np.sqrt(np.maximum(var_mean, 0.0))
+        se_obs = np.sqrt(np.maximum(var_obs, 0.0))
+
+        df = self.model.nobs - len(self.params)
+        df = max(df, 1)
+
+        return PredictionResults(
+            predicted_mean=predicted_mean,
+            se_mean=se_mean,
+            se_obs=se_obs,
+            _df=df,
+            _alpha_default=alpha,
+        )
+
+    def summary(self, alpha: float = 0.05) -> str:
+        """Text summary of estimation results (statsmodels-style).
+
+        Parameters
+        ----------
+        alpha : float
+            Significance level for confidence intervals
+
+        Returns
+        -------
+        str
+            Formatted summary table
+        """
+        ci = self.conf_int(alpha)
+        lines = []
+        sep = "=" * 78
+        lines.append(sep)
+        lines.append("              ALS-GLS System Estimation Results")
+        lines.append(sep)
+        lines.append(f"Observations: {self.model.nobs}")
+        lines.append(f"Equations: {self.model.keqs}")
+        lines.append(f"Factor rank: {self.rank}")
+        lines.append(f"Log-Likelihood: {self.loglike:.2f}")
+        lines.append("-" * 78)
+        header = f"{'Parameter':<40} {'Coef':>10} {'Std Err':>10} {'t':>8} {'P>|t|':>8}"
+        lines.append(header)
+        lines.append("-" * 78)
+
+        for i, (eq_name, var_name) in enumerate(self.param_labels):
+            label = f"{eq_name}:{var_name}"
+            if len(label) > 38:
+                label = label[:35] + "..."
+            coef = self.params[i]
+            se = self.bse[i]
+            t = self.tvalues[i]
+            p = self.pvalues[i]
+            line = f"{label:<40} {coef:>10.4f} {se:>10.4f} {t:>8.2f} {p:>8.4f}"
+            lines.append(line)
+
+        lines.append(sep)
+        lines.append(f"Confidence intervals ({100 * (1 - alpha):.0f}%):")
+        lines.append(
+            f"{'Parameter':<40} {'[' + str(alpha / 2):>10} {str(1 - alpha / 2) + ']':>10}"
+        )
+        lines.append("-" * 78)
+        for i, (eq_name, var_name) in enumerate(self.param_labels):
+            label = f"{eq_name}:{var_name}"
+            if len(label) > 38:
+                label = label[:35] + "..."
+            line = f"{label:<40} {ci[i, 0]:>10.4f} {ci[i, 1]:>10.4f}"
+            lines.append(line)
+        lines.append(sep)
+
+        return "\n".join(lines)

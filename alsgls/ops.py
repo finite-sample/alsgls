@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from typing import Any
 
 import numpy as np
@@ -236,6 +236,86 @@ def apply_siginv_F(F: np.ndarray, Dinv: np.ndarray, C_chol: np.ndarray) -> np.nd
     return np.asarray(DinvF - correction)
 
 
+def compute_XtSigmaInvX(
+    Xs: list[np.ndarray],
+    F: np.ndarray,
+    D: np.ndarray,
+    lam_B: float = 0.0,
+) -> np.ndarray:
+    """
+    Compute (X'Σ⁻¹X + λI) using the Woodbury identity.
+
+    For GLS with Σ = FF' + diag(D), we need the precision-weighted design
+    matrix cross-product for computing coefficient standard errors:
+
+        Var(β̂) = (X'Σ⁻¹X + λI)⁻¹
+
+    Using Woodbury: Σ⁻¹ = D⁻¹ - D⁻¹F C⁻¹ F'D⁻¹ where C = I + F'D⁻¹F
+
+    The block structure gives:
+        [X'Σ⁻¹X]_{jl} = X_j' [Σ⁻¹]_{jl} X_l
+
+    Parameters
+    ----------
+    Xs : list of np.ndarray
+        List of design matrices [X_0, ..., X_{K-1}] where X_j is (N, p_j)
+    F : np.ndarray
+        (K, k) factor loadings matrix
+    D : np.ndarray
+        (K,) diagonal noise variances
+    lam_B : float
+        Ridge penalty to add to diagonal (for regularization)
+
+    Returns
+    -------
+    XtSinvX : np.ndarray
+        (p_total, p_total) matrix where p_total = sum(p_j)
+    """
+    K = len(Xs)
+    p_list = [X.shape[1] for X in Xs]
+    p_total = sum(p_list)
+
+    Dinv, C_chol = woodbury_chol(F, D)
+
+    Cinv_Ft = _right_solve_with_C(F.T, C_chol)
+
+    XtSinvX = np.zeros((p_total, p_total))
+
+    row_start = 0
+    for j in range(K):
+        p_j = p_list[j]
+        X_j = Xs[j]
+        d_j_inv = Dinv[j]
+        f_j = F[j, :]
+
+        col_start = 0
+        for ell in range(K):
+            p_ell = p_list[ell]
+            X_ell = Xs[ell]
+            d_ell_inv = Dinv[ell]
+
+            if j == ell:
+                XtX_jj = X_j.T @ X_j
+                block = d_j_inv * XtX_jj
+            else:
+                block = np.zeros((p_j, p_ell))
+
+            Cinv_f_ell = Cinv_Ft[:, ell]
+            coef = d_j_inv * d_ell_inv * (f_j @ Cinv_f_ell)
+            XtX_jl = X_j.T @ X_ell
+            block -= coef * XtX_jl
+
+            XtSinvX[row_start : row_start + p_j, col_start : col_start + p_ell] = block
+            col_start += p_ell
+
+        row_start += p_j
+
+    if lam_B > 0:
+        XtSinvX += lam_B * np.eye(p_total)
+
+    return XtSinvX
+
+
 def grad_F_nll(
     R: np.ndarray,
     F: np.ndarray,
@@ -295,3 +375,58 @@ def grad_F_nll(
     grad = SigmaInvF - (1.0 / N) * SigmaInv_S_SigmaInvF + lam_F * F
 
     return np.asarray(grad)
+
+
+def compute_prediction_variance(
+    Xs: Sequence[np.ndarray],
+    F: np.ndarray,
+    D: np.ndarray,
+    cov_params: np.ndarray,
+    include_residual: bool = True,
+) -> np.ndarray:
+    """
+    Compute prediction variances for new observations.
+
+    For each observation i and equation j:
+    - Var(E[y_j|X]) = X_j[i,:] @ Cov(β̂_j) @ X_j[i,:]
+    - Var(y_j|X) = Var(E[y_j|X]) + Σ_jj where Σ_jj = ||F[j,:]||² + D[j]
+
+    Parameters
+    ----------
+    Xs : Sequence of np.ndarray
+        List of design matrices [X_0, ..., X_{K-1}] where X_j is (N_new, p_j)
+    F : np.ndarray
+        (K, k) factor loadings matrix
+    D : np.ndarray
+        (K,) diagonal noise variances
+    cov_params : np.ndarray
+        (p_total, p_total) covariance matrix of parameter estimates
+    include_residual : bool
+        If True, add Σ_jj (residual variance) for prediction intervals.
+        If False, return only variance of mean prediction (confidence intervals).
+
+    Returns
+    -------
+    var_pred : np.ndarray
+        (N_new, K) array of prediction variances
+    """
+    K = len(Xs)
+    if K == 0:
+        raise ValueError("Xs must contain at least one design matrix")
+
+    N_new = Xs[0].shape[0]
+    p_list = [X.shape[1] for X in Xs]
+    offsets = np.cumsum([0] + p_list)
+
+    var_pred = np.zeros((N_new, K))
+
+    for j in range(K):
+        X_j = Xs[j]
+        cov_j = cov_params[offsets[j] : offsets[j + 1], offsets[j] : offsets[j + 1]]
+        var_pred[:, j] = np.einsum("np,pq,nq->n", X_j, cov_j, X_j)
+
+        if include_residual:
+            sigma_jj = np.sum(F[j, :] ** 2) + D[j]
+            var_pred[:, j] += sigma_jj
+
+    return var_pred

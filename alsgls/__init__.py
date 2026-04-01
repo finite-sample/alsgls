@@ -1,5 +1,5 @@
 from .als import als_gls
-from .api import ALSGLS, ALSGLSSystem, ALSGLSSystemResults
+from .api import ALSGLS, ALSGLSSystem, ALSGLSSystemResults, PredictionResults
 from .metrics import mse, nll_per_row
 from .ops import XB_from_Blist
 from .rank_selection import select_rank_bic, select_rank_cv
@@ -9,6 +9,7 @@ __all__ = [
     "ALSGLS",
     "ALSGLSSystem",
     "ALSGLSSystemResults",
+    "PredictionResults",
     "XB_from_Blist",
     "als_gls",
     "mse",

@@ -49,6 +49,12 @@ Background material and reproducible experiments are available in the notebooks 
 
 This package provides a modern, type-safe implementation of **Alternating-Least-Squares (ALS)** for low-rank GLS problems. The Woodbury identity reduces the expensive inverse to a tiny k × k system, and the β-update can be written without explicitly forming dense matrices. 
 
+**New in v1.2.0:**
+- **Standard errors** (`bse`) for all regression coefficients
+- **t-statistics** (`tvalues`) and **p-values** (`pvalues`) for hypothesis testing
+- **Confidence intervals** via `conf_int()` method
+- **Summary tables** via `summary()` for statsmodels-style output
+
 **New in v1.1.0:**
 - **Rank selection**: BIC and cross-validation for automatic rank selection
 - **Gradient-based factor update**: Cleaner theory, same convergence guarantees

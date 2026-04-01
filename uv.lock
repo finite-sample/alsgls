@@ -29,10 +29,11 @@ wheels = [
 
 [[package]]
 name = "alsgls"
-version = "1.1.0"
+version = "1.2.0"
 source = { editable = "." }
 dependencies = [
     { name = "numpy" },
+    { name = "scipy" },
 ]
 
 [package.optional-dependencies]
@@ -74,6 +75,7 @@ requires-dist = [
     { name = "numpy", specifier = ">=1.21" },
     { name = "pandas", marker = "extra == 'pandas'", specifier = ">=1.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0" },
+    { name = "scipy", specifier = ">=1.0" },
     { name = "scipy", marker = "extra == 'dev'", specifier = ">=1.0" },
     { name = "scipy", marker = "extra == 'lsqr'", specifier = ">=1.0" },
     { name = "sphinx", marker = "extra == 'docs'", specifier = ">=7.0" },
