@@ -206,7 +206,12 @@ def _sanitize_regularization_params(
                 f"Try lam_B=1e-3 for light regularization."
             )
 
-    return float(lam_F or 1e-3), float(lam_B or 1e-3)
+    # ``x or default`` would discard an explicit 0.0, which the checks above
+    # accept as a valid ("non-negative") request for no regularization.
+    return (
+        float(1e-3 if lam_F is None else lam_F),
+        float(1e-3 if lam_B is None else lam_B),
+    )
 
 
 def _validate_gls_inputs(

@@ -17,6 +17,11 @@ from .ops import (
     woodbury_chol,
 )
 
+# Maximum number of step halvings in the F/D backtracking line search.
+# 40 halvings reach t ~ 9e-13, enough to find an improving step at any data
+# scale encountered in double precision.
+_MAX_BACKTRACK = 40
+
 
 def als_gls(
     Xs: list[np.ndarray],
@@ -182,13 +187,33 @@ def als_gls(
         # Compute gradient of NLL w.r.t. F
         grad_F = grad_F_nll(R, F, D, Dinv, C_chol, lam_F)
 
-        # Steepest descent direction
-        F_prop = F - grad_F  # Step size handled in backtracking
+        # Steepest descent direction.
+        dF = -grad_F
 
-        # D update: MLE estimate diag(S - F F^T) where S = R^T R / N
+        # Scale-calibrated initial step length.
+        #
+        # The NLL is equivariant under Y -> sY, (F, D) -> (sF, s^2 D) up to an
+        # additive K log s, so grad_F scales like 1/s while F scales like s.
+        # A hard-coded unit step is therefore off by a factor of s^2: on
+        # small-magnitude data (e.g. returns expressed as decimals) it
+        # overshoots by orders of magnitude, every backtracked candidate is
+        # rejected, and F stays frozen at its initialization -- not a
+        # stationary point (docs/source/formal_methods.md, Theorems 1-2).
+        # Taking t0 = ||F|| / ||grad_F|| makes the trial step transform the
+        # same way F does, so the whole iteration is scale-equivariant.
+        gnorm = float(np.linalg.norm(dF))
+        fnorm = float(np.linalg.norm(F))
+        if gnorm > 0.0:
+            t0 = (fnorm / gnorm) if fnorm > 0.0 else (1.0 / gnorm)
+        else:
+            t0 = 0.0
+
+        # D update: closed-form MLE given the trial F,
+        # d_j = max(S_jj - (F F^T)_jj, d_floor)  with  S = R^T R / N.
         diag_S = np.sum(R**2, axis=0) / N
-        diag_FFt = np.sum(F_prop**2, axis=1)
-        D_prop = np.maximum(diag_S - diag_FFt, d_floor)
+
+        def D_mle(F_try):
+            return np.maximum(diag_S - np.sum(F_try**2, axis=1), d_floor)
 
         # Guarded scale correction helper (applied to a candidate F,D)
         def try_with_scale(F_try, D_try):
@@ -215,19 +240,24 @@ def als_gls(
             else:
                 return F_try, D_try, nll0, 1.0
 
-        # --- Backtracking/damped acceptance on (F, D)
+        # --- Backtracking line search on (F, D)
         F_old, D_old = F, D
-        dF = F_prop - F_old
-        dD = D_prop - D_old
 
         best_nll = base_nll
         best_F, best_D = F_old, D_old
         accepted_t = 0.0
         used_scale = 1.0
 
-        for t in (1.0, 0.5, 0.25, 0.125, 0.0625):
+        # Halve the step until it improves the NLL. Backtracking must be
+        # allowed to run to convergence: a ladder truncated at a fixed t_min
+        # rejects every candidate whenever the initial step overshoots, which
+        # silently freezes the F-step instead of finding a descent step.
+        t = t0
+        for _ in range(_MAX_BACKTRACK):
+            if t == 0.0:
+                break
             F_try = F_old + t * dF
-            D_try = np.maximum(D_old + t * dD, d_floor)
+            D_try = D_mle(F_try)
             F_acc, D_acc, nll_acc, sc_used = try_with_scale(F_try, D_try)
             # Accept only if we beat the per-sweep baseline
             if nll_acc < best_nll - 1e-12:
@@ -236,6 +266,7 @@ def als_gls(
                 accepted_t = t
                 used_scale = sc_used
                 break  # first improving step is fine (monotone)
+            t *= 0.5
 
         # Accept (or keep old F,D if no improvement)
         F, D = best_F, best_D
