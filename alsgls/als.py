@@ -98,7 +98,25 @@ def als_gls(
         p = X.shape[1]
         XtX = X.T @ X + lam_B * np.eye(p)
         Xty = X.T @ Y[:, [j]]
-        B.append(np.linalg.solve(XtX, Xty))
+        try:
+            B.append(np.linalg.solve(XtX, Xty))
+        except np.linalg.LinAlgError as exc:
+            # lam_B used to be floored at 1e-3 by a falsy-zero bug, so a
+            # rank-deficient design was quietly ridged into solvability. Now
+            # that lam_B = 0 means zero, say what happened rather than letting
+            # a bare "Singular matrix" out -- and do not silently substitute a
+            # pseudo-inverse, which would be the same kind of quiet
+            # substitution that hid this in the first place.
+            msg = (
+                f"Equation {j} has a singular X'X"
+                + (
+                    " and lam_B is 0, so there is nothing to regularize it. "
+                    "Drop the collinear columns or pass lam_B > 0."
+                    if lam_B == 0
+                    else f" even with lam_B={lam_B}. Drop the collinear columns."
+                )
+            )
+            raise np.linalg.LinAlgError(msg) from exc
 
     # Residuals
     R = Y - XB_from_Blist(Xs, B)

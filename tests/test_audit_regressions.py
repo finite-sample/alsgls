@@ -226,3 +226,28 @@ def test_predict_interval_uses_stacked_df():
         )
     )
     np.testing.assert_allclose(half / se, stats.t.ppf(0.975, expected_df), rtol=1e-8)
+
+
+def test_zero_ridge_on_a_singular_design_explains_itself():
+    """lam_B = 0 on a rank-deficient X must say why, not emit "Singular matrix".
+
+    lam_B was floored at 1e-3 by a falsy-zero bug, so a rank-deficient design
+    was quietly ridged into solvability. Honouring lam_B = 0 exposes the
+    singularity, which is correct -- but the message has to name the cause,
+    and it must not silently substitute a pseudo-inverse, which would be the
+    same class of quiet substitution the falsy-zero fix removed.
+    """
+    import numpy as np
+    import pytest
+
+    from alsgls import als_gls
+
+    n = 10
+    x = np.c_[np.ones(n), np.ones(n)]  # duplicated column: rank 1 of 2
+    y = np.c_[np.linspace(0, 1, n), np.linspace(1, 0, n)]
+
+    with pytest.raises(np.linalg.LinAlgError, match="lam_B is 0"):
+        als_gls([x, x], y, k=1, lam_B=0.0, lam_F=0.0, sweeps=1)
+
+    # A positive ridge still solves it.
+    als_gls([x, x], y, k=1, lam_B=1e-3, lam_F=1e-3, sweeps=1)
