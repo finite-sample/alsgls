@@ -135,8 +135,22 @@ def als_gls(
     else:
         F = np.zeros((K, k))
 
+    # D is a variance, so its floor has to be a variance too. A fixed absolute
+    # floor is not scale-equivariant: under Y -> sY the true D scales as s^2,
+    # so for small enough s every entry lands on the floor and the fit stops
+    # tracking the data. Measured on B, which must satisfy B(sY) == B(Y):
+    # the error saturated at 2.6e-2 for s <= 1e-4 with an absolute 1e-8.
+    # Taken relative to the residual variance scale, d_floor keeps its meaning
+    # ("no variance below this fraction of a typical one") and transforms
+    # correctly. The reference is fixed once, so it does not drift between
+    # sweeps.
+    var_ref = float(np.mean(np.var(R, axis=0)))
+    if not np.isfinite(var_ref) or var_ref <= 0.0:
+        var_ref = 1.0
+    d_floor_eff = d_floor * var_ref
+
     # Diagonal noise (start from residual variances, floored)
-    D = np.maximum(np.var(R, axis=0), d_floor)
+    D = np.maximum(np.var(R, axis=0), d_floor_eff)
 
     # ----------------------------
     # Traces & baseline
@@ -231,7 +245,7 @@ def als_gls(
         diag_S = np.sum(R**2, axis=0) / N
 
         def D_mle(F_try):
-            return np.maximum(diag_S - np.sum(F_try**2, axis=1), d_floor)
+            return np.maximum(diag_S - np.sum(F_try**2, axis=1), d_floor_eff)
 
         # Guarded scale correction helper (applied to a candidate F,D)
         def try_with_scale(F_try, D_try):

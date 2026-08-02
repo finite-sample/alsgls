@@ -130,15 +130,18 @@ class TestFStepLineSearch:
         + K log s, so an unpenalised solver run on ``sY`` must trace the
         rescaled iterates of the run on ``Y``.  (The ridge terms are absolute
         and therefore scale-dependent by construction, which is why this is
-        asserted at lam=0; ``d_floor`` is a variance floor and is matched to
-        the scale for the same reason.)
+        asserted at lam=0.)
+
+        ``d_floor`` used to be an absolute variance and had to be scaled by
+        s**2 here to compensate.  It is now taken relative to the residual
+        variance, so the caller no longer scales it -- passing a scaled value
+        would floor the fit twice over.  ``scale_floor`` bounds a ratio of
+        quadratic forms, which is already scale free, so it is left alone.
         """
         Xs, Y, _, _ = simulate_sur(N_tr=120, N_te=10, K=8, p=3, k=2, seed=1)
         kw = {"k": 2, "sweeps": 30, "lam_F": 0.0, "lam_B": 0.0}
         B1, F1, D1, _, _ = als_gls(Xs, Y, **kw)
-        _, _, _, _, infos = als_gls(
-            Xs, s * Y, d_floor=1e-8 * s * s, scale_floor=1e-8 * s * s, **kw
-        )
+        _, _, _, _, infos = als_gls(Xs, s * Y, **kw)
 
         R = s * Y - XB_from_Blist(Xs, [s * b for b in B1])
         ref = float(nll_per_row(R, s * F1, s * s * D1))
@@ -251,3 +254,47 @@ def test_zero_ridge_on_a_singular_design_explains_itself():
 
     # A positive ridge still solves it.
     als_gls([x, x], y, k=1, lam_B=1e-3, lam_F=1e-3, sweeps=1)
+
+
+class TestVarianceFloorIsRelative:
+    """``d_floor`` is a variance, so an absolute value is not scale-equivariant.
+
+    Under ``Y -> sY`` the true ``D`` scales as ``s**2``, so a fixed floor of
+    1e-8 swallows the whole covariance once ``s`` is small: every entry lands
+    on the floor and the fit stops tracking the data.  Measured on ``B``, which
+    must satisfy ``B(sY) == B(Y)`` exactly, the error saturated at 2.6e-2 for
+    every ``s <= 1e-4``.
+
+    Taken relative to the residual variance scale it transforms correctly, and
+    ``d_floor`` keeps a meaning the caller can reason about: "no variance below
+    this fraction of a typical one".
+
+    Known bound: below roughly ``s = 1e-6`` other absolute constants take over
+    -- ``clip(D, 1e-12)`` in ops.py, the ``1e-8`` floors on the SVD threshold
+    and the preconditioner in als.py -- and equivariance degrades again.
+    Making those relative means threading a scale reference through the
+    numerical core, which is not attempted here.
+    """
+
+    def test_fit_is_scale_invariant_over_the_practical_range(self):
+        import numpy as np
+
+        from alsgls import ALSGLS
+
+        rng = np.random.RandomState(7)
+        n, n_eq, p = 120, 5, 3
+        xs = [rng.randn(n, p) for _ in range(n_eq)]
+        beta = rng.randn(p, n_eq)
+        y = np.column_stack([xs[k] @ beta[:, k] for k in range(n_eq)])
+        y = y + 0.4 * rng.randn(n, n_eq)
+
+        def fit_at(scale):
+            m = ALSGLS(rank=2, cv_random_state=0)
+            m.fit(xs, y * scale)
+            return np.concatenate([np.ravel(b) for b in m.B_list_]) / scale
+
+        base = fit_at(1.0)
+        for scale in (1e-2, 1e-4):
+            assert np.max(np.abs(fit_at(scale) - base)) < 1e-3, (
+                f"B is not invariant at s={scale}"
+            )
