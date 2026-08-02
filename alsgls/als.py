@@ -107,14 +107,11 @@ def als_gls(
             # a bare "Singular matrix" out -- and do not silently substitute a
             # pseudo-inverse, which would be the same kind of quiet
             # substitution that hid this in the first place.
-            msg = (
-                f"Equation {j} has a singular X'X"
-                + (
-                    " and lam_B is 0, so there is nothing to regularize it. "
-                    "Drop the collinear columns or pass lam_B > 0."
-                    if lam_B == 0
-                    else f" even with lam_B={lam_B}. Drop the collinear columns."
-                )
+            msg = f"Equation {j} has a singular X'X" + (
+                " and lam_B is 0, so there is nothing to regularize it. "
+                "Drop the collinear columns or pass lam_B > 0."
+                if lam_B == 0
+                else f" even with lam_B={lam_B}. Drop the collinear columns."
             )
             raise np.linalg.LinAlgError(msg) from exc
 
