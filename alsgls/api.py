@@ -204,6 +204,18 @@ class ALSGLS:
         if not getattr(self, "is_fitted_", False):
             raise RuntimeError("The estimator has not been fitted yet")
 
+    def _resid_df(self) -> int:
+        """Residual degrees of freedom of the stacked system.
+
+        The SUR system stacks ``K`` equations of ``N`` rows each, so it has
+        ``N * K`` observations, not ``N``.  Subtracting the system-wide
+        parameter count from the per-equation row count instead mixes two
+        different sample sizes and goes negative as soon as ``p_total > N``.
+        """
+        self._ensure_fitted()
+        n_total = self.n_obs_ * self.n_targets_
+        return max(n_total - sum(self.n_features_in_), 1)
+
     def predict(self, Xs: Sequence[Any]) -> np.ndarray:
         self._ensure_fitted()
         X_list = [_asarray_2d(X) for X in Xs]
@@ -290,8 +302,7 @@ class ALSGLS:
             include_residual=include_residual,
         )
 
-        df = self.n_obs_ - sum(self.n_features_in_)
-        df = max(df, 1)
+        df = self._resid_df()
         q = stats.t.ppf(1 - alpha / 2, df)
         se = np.sqrt(np.maximum(variance, 0.0))
 
@@ -548,12 +559,24 @@ class ALSGLSSystemResults:
             t = np.where(se > 0, self.params / se, 0.0)
         return t
 
+    def _resid_df(self) -> int:
+        """Residual degrees of freedom of the stacked system.
+
+        The system stacks ``keqs`` equations of ``nobs`` rows each, so the
+        total number of observations is ``nobs * keqs``.
+        """
+        n_total = self.model.nobs * self.model.keqs
+        return max(n_total - len(self.params), 1)
+
+    @property
+    def df_resid(self) -> int:
+        """Residual degrees of freedom: ``nobs * keqs - n_params``."""
+        return self._resid_df()
+
     @property
     def pvalues(self) -> np.ndarray:
         """Two-sided p-values for H₀: β = 0."""
-        df = self.model.nobs - len(self.params)
-        df = max(df, 1)
-        return 2.0 * stats.t.sf(np.abs(self.tvalues), df)
+        return 2.0 * stats.t.sf(np.abs(self.tvalues), self._resid_df())
 
     def conf_int(self, alpha: float = 0.05) -> np.ndarray:
         """Confidence intervals for parameters.
@@ -568,9 +591,7 @@ class ALSGLSSystemResults:
         ci : np.ndarray
             (n_params, 2) array with lower and upper bounds
         """
-        df = self.model.nobs - len(self.params)
-        df = max(df, 1)
-        q = stats.t.ppf(1 - alpha / 2, df)
+        q = stats.t.ppf(1 - alpha / 2, self._resid_df())
         se = self.bse
         lower = self.params - q * se
         upper = self.params + q * se
@@ -624,8 +645,7 @@ class ALSGLSSystemResults:
         se_mean = np.sqrt(np.maximum(var_mean, 0.0))
         se_obs = np.sqrt(np.maximum(var_obs, 0.0))
 
-        df = self.model.nobs - len(self.params)
-        df = max(df, 1)
+        df = self._resid_df()
 
         return PredictionResults(
             predicted_mean=predicted_mean,

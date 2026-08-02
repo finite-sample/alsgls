@@ -40,7 +40,23 @@ jobs:
         run: |
           python3 .github/scripts/process_readme.py
           
+      # On a pull_request, actions/checkout leaves a detached HEAD at the merge
+      # commit, so committing and pushing fails outright with "You are not
+      # currently on a branch". Verify instead: if the regenerated README
+      # differs from the committed one, the template and the file are out of
+      # step and that is worth failing the PR for.
+      - name: Verify README matches the template
+        if: github.event_name == 'pull_request'
+        run: |
+          git diff --exit-code README.md || {
+            echo "README.md is out of date. Regenerate it with"
+            echo "  python3 .github/scripts/process_readme.py"
+            echo "and commit the result."
+            exit 1
+          }
+
       - name: Commit changes
+        if: github.event_name != 'pull_request'
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
