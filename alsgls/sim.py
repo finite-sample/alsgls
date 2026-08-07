@@ -10,40 +10,26 @@ def simulate_sur(
 ) -> tuple[list[np.ndarray], np.ndarray, list[np.ndarray], np.ndarray]:
     """Simulate a Seemingly Unrelated Regression (SUR) dataset.
 
-    Parameters
-    ----------
-    N_tr : int
-        Number of training samples.
-    N_te : int
-        Number of test samples.
-    K : int
-        Number of response equations.
-    p : int
-        Number of features per equation.
-    k : int
-        Latent factor dimension controlling correlated noise.
-    seed : int, optional
-        Seed for the NumPy random number generator. Defaults to ``0``.
+    Args:
+        N_tr: Number of training samples.
+        N_te: Number of test samples.
+        K: Number of response equations.
+        p: Number of features per equation.
+        k: Latent factor dimension controlling correlated noise.
+        seed: Seed for the NumPy random number generator. Defaults to ``0``.
 
-    Returns
-    -------
-    X_tr : list of ndarray
-        Feature matrices for the training set. Each element has shape ``(N_tr, p)``.
-    Y_tr : ndarray
-        Training responses of shape ``(N_tr, K)``.
-    X_te : list of ndarray
-        Feature matrices for the test set. Each element has shape ``(N_te, p)``.
-    Y_te : ndarray
-        Test responses of shape ``(N_te, K)``.
+    Returns:
+        X_tr: Feature matrices for the training set. Each element has shape ``(N_tr, p)``.
+        Y_tr: Training responses of shape ``(N_tr, K)``.
+        X_te: Feature matrices for the test set. Each element has shape ``(N_te, p)``.
+        Y_te: Test responses of shape ``(N_te, K)``.
 
-    Notes
-    -----
-    Randomness is controlled via ``numpy.random.default_rng(seed)``; pass a
-    different ``seed`` for different simulations.
+    Notes:
+        Randomness is controlled via ``numpy.random.default_rng(seed)``; pass a
+        different ``seed`` for different simulations.
 
-    Examples
-    --------
-    >>> Xtr, Ytr, Xte, Yte = simulate_sur(100, 20, K=3, p=5, k=2, seed=42)
+    Examples:
+        >>> Xtr, Ytr, Xte, Yte = simulate_sur(100, 20, K=3, p=5, k=2, seed=42)
     """
     rng = np.random.default_rng(seed)
     N = N_tr + N_te
@@ -69,41 +55,26 @@ def simulate_gls(
     This variant allows each response equation to have its own number of
     features as specified by ``p_list``.
 
-    Parameters
-    ----------
-    N_tr : int
-        Number of training samples.
-    N_te : int
-        Number of test samples.
-    p_list : sequence of int
-        Number of features for each equation.
-    k : int
-        Latent factor dimension controlling correlated noise.
-    seed : int, optional
-        Seed for the NumPy random number generator. Defaults to ``0``.
+    Args:
+        N_tr: Number of training samples.
+        N_te: Number of test samples.
+        p_list: Number of features for each equation.
+        k: Latent factor dimension controlling correlated noise.
+        seed: Seed for the NumPy random number generator. Defaults to ``0``.
 
-    Returns
-    -------
-    X_tr : list of ndarray
-        Feature matrices for the training set. ``X_tr[j]`` has shape
-        ``(N_tr, p_list[j])``.
-    Y_tr : ndarray
-        Training responses of shape ``(N_tr, K)`` where ``K = len(p_list)``.
-    X_te : list of ndarray
-        Feature matrices for the test set. ``X_te[j]`` has shape
-        ``(N_te, p_list[j])``.
-    Y_te : ndarray
-        Test responses of shape ``(N_te, K)``.
+    Returns:
+        X_tr: Feature matrices for the training set. ``X_tr[j]`` has shape ``(N_tr, p_list[j])``.
+        Y_tr: Training responses of shape ``(N_tr, K)`` where ``K = len(p_list)``.
+        X_te: Feature matrices for the test set. ``X_te[j]`` has shape ``(N_te, p_list[j])``.
+        Y_te: Test responses of shape ``(N_te, K)``.
 
-    Notes
-    -----
-    Randomness is controlled via ``numpy.random.default_rng(seed)``; pass a
-    different ``seed`` for different simulations.
+    Notes:
+        Randomness is controlled via ``numpy.random.default_rng(seed)``; pass a
+        different ``seed`` for different simulations.
 
-    Examples
-    --------
-    >>> p_list = [3, 5, 2]
-    >>> Xtr, Ytr, Xte, Yte = simulate_gls(100, 20, p_list, k=2, seed=0)
+    Examples:
+        >>> p_list = [3, 5, 2]
+        >>> Xtr, Ytr, Xte, Yte = simulate_gls(100, 20, p_list, k=2, seed=0)
     """
     rng = np.random.default_rng(seed)
     K = len(p_list)

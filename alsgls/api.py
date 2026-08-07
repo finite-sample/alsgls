@@ -17,7 +17,6 @@ from .rank_selection import select_rank_bic, select_rank_cv
 
 def _auto_rank(num_equations: int) -> int:
     """Heuristic rank used when the user does not provide one."""
-
     if num_equations <= 0:
         raise ValueError("num_equations must be positive")
     # Cap the rank to avoid chasing noise; allow moderate growth with K.
@@ -26,7 +25,6 @@ def _auto_rank(num_equations: int) -> int:
 
 def _asarray_2d(x: Any, *, dtype: Any = np.float64) -> np.ndarray:
     """Convert array-like input to a 2D ``numpy.ndarray``."""
-
     if hasattr(x, "to_numpy"):
         arr = x.to_numpy()
     else:
@@ -54,21 +52,21 @@ def _eq_name(name: Any, index: int) -> str:
 class ALSGLS:
     """Scikit-learn style estimator for low-rank GLS via ALS.
 
-    Parameters
-    ----------
-    rank : int, str, or None
-        Rank of the low-rank factor structure. Options:
-        - int: Fixed rank value
-        - "auto": Heuristic based on K (default)
-        - "bic": Select via BIC minimization
-        - "cv": Select via cross-validation
-        - None: Same as "auto"
-    rank_candidates : list of int, optional
-        Candidate ranks for "bic" or "cv" selection.
-    cv_folds : int
-        Number of folds for "cv" rank selection.
-    cv_random_state : int or None
-        Random state for CV fold splits.
+    Args:
+        rank: Rank of the low-rank factor structure. Options: - int: Fixed rank value - "auto": Heuristic based on K (default) - "bic": Select via BIC minimization - "cv": Select via cross-validation - None: Same as "auto"
+        rank_candidates: Candidate ranks for "bic" or "cv" selection.
+        cv_folds: Number of folds for "cv" rank selection.
+        cv_random_state: Random state for CV fold splits.
+        lam_F: Ridge penalty on the factor loadings.
+        lam_B: Ridge penalty on the coefficients.
+        max_sweeps: Maximum number of alternating sweeps.
+        rel_tol: Relative decrease in the negative log-likelihood below which
+            the sweeps stop early.
+        d_floor: Smallest permitted diagonal variance.
+        cg_maxit: Iteration cap for the conjugate-gradient solve.
+        cg_tol: Relative residual tolerance for that solve.
+        scale_correct: Apply the guarded MLE scale correction to Sigma.
+        scale_floor: Smallest permitted scale factor for that correction.
     """
 
     def __init__(
@@ -263,20 +261,18 @@ class ALSGLS:
     ) -> dict[str, np.ndarray]:
         """Compute prediction or confidence intervals for new observations.
 
-        Parameters
-        ----------
-        Xs : Sequence
-            List of design matrices [X_0, ..., X_{K-1}] for new observations.
-        alpha : float
-            Significance level (default 0.05 for 95% intervals).
-        return_type : str
-            "prediction" for prediction intervals (includes residual variance),
-            "confidence" for confidence intervals (variance of E[y|X] only).
+        Args:
+            Xs: List of design matrices [X_0, ..., X_{K-1}] for new observations.
+            alpha: Significance level (default 0.05 for 95% intervals).
+            return_type: "prediction" for prediction intervals (includes residual variance), "confidence" for confidence intervals (variance of E[y|X] only).
 
-        Returns
-        -------
-        dict
-            {"mean": (N, K), "lower": (N, K), "upper": (N, K)}
+        Returns:
+            dict: {"mean": (N, K), "lower": (N, K), "upper": (N, K)}
+
+        Raises:
+            ValueError: If ``return_type`` is neither ``"prediction"`` nor
+                ``"confidence"``, or the design matrices do not match the fitted
+                model in count or in number of columns.
         """
         self._ensure_fitted()
 
@@ -326,15 +322,11 @@ class PredictionResults:
     def conf_int_mean(self, alpha: float | None = None) -> np.ndarray:
         """Confidence intervals for E[y|X].
 
-        Parameters
-        ----------
-        alpha : float, optional
-            Significance level (default 0.05 for 95% CI)
+        Args:
+            alpha: Significance level (default 0.05 for 95% CI)
 
-        Returns
-        -------
-        ci : np.ndarray
-            (N, K, 2) array with lower and upper bounds
+        Returns:
+            ci: (N, K, 2) array with lower and upper bounds
         """
         if alpha is None:
             alpha = self._alpha_default
@@ -346,15 +338,11 @@ class PredictionResults:
     def conf_int_obs(self, alpha: float | None = None) -> np.ndarray:
         """Prediction intervals for y|X (includes residual variance).
 
-        Parameters
-        ----------
-        alpha : float, optional
-            Significance level (default 0.05 for 95% CI)
+        Args:
+            alpha: Significance level (default 0.05 for 95% CI)
 
-        Returns
-        -------
-        ci : np.ndarray
-            (N, K, 2) array with lower and upper bounds
+        Returns:
+            ci: (N, K, 2) array with lower and upper bounds
         """
         if alpha is None:
             alpha = self._alpha_default
@@ -581,15 +569,11 @@ class ALSGLSSystemResults:
     def conf_int(self, alpha: float = 0.05) -> np.ndarray:
         """Confidence intervals for parameters.
 
-        Parameters
-        ----------
-        alpha : float
-            Significance level (default 0.05 for 95% CI)
+        Args:
+            alpha: Significance level (default 0.05 for 95% CI)
 
-        Returns
-        -------
-        ci : np.ndarray
-            (n_params, 2) array with lower and upper bounds
+        Returns:
+            ci: (n_params, 2) array with lower and upper bounds
         """
         q = stats.t.ppf(1 - alpha / 2, self._resid_df())
         se = self.bse
@@ -604,18 +588,16 @@ class ALSGLSSystemResults:
     ) -> PredictionResults:
         """Get prediction results with standard errors and intervals.
 
-        Parameters
-        ----------
-        exog : Mapping, Sequence, or None
-            Design matrices for new observations. If None, uses training data.
-            Can be a dict {eq_name: X_j} or list [X_0, ..., X_{K-1}].
-        alpha : float
-            Default significance level for intervals (default 0.05).
+        Args:
+            exog: Design matrices for new observations. If None, uses training data. Can be a dict {eq_name: X_j} or list [X_0, ..., X_{K-1}].
+            alpha: Default significance level for intervals (default 0.05).
 
-        Returns
-        -------
-        PredictionResults
-            Object with predicted_mean, se_mean, se_obs, and interval methods.
+        Returns:
+            PredictionResults: Object with predicted_mean, se_mean, se_obs, and interval methods.
+
+        Raises:
+            ValueError: If design matrices are not supplied for every equation, or
+                one has the wrong number of columns.
         """
         if exog is None:
             Xs = [eq.X for eq in self.model._equations]
@@ -658,15 +640,11 @@ class ALSGLSSystemResults:
     def summary(self, alpha: float = 0.05) -> str:
         """Text summary of estimation results (statsmodels-style).
 
-        Parameters
-        ----------
-        alpha : float
-            Significance level for confidence intervals
+        Args:
+            alpha: Significance level for confidence intervals
 
-        Returns
-        -------
-        str
-            Formatted summary table
+        Returns:
+            str: Formatted summary table
         """
         ci = self.conf_int(alpha)
         lines = []

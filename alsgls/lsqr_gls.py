@@ -37,18 +37,11 @@ ArrayLike = np.ndarray | Sequence[float]
 class WoodburyWeight:
     """Row-wise operator ``W`` satisfying ``W.T @ W = Σ^{-1}``.
 
-    Parameters
-    ----------
-    d:
-        Diagonal of ``D`` in ``Σ = D + F F^T``.
-    F:
-        Optional factor loadings.  If ``None`` or empty then ``Σ`` is purely
-        diagonal and the action reduces to simple scaling by ``D^{-1/2}``.
-    d_floor:
-        Lower bound applied element-wise to ``d`` to avoid singularities.
-    sv_tol:
-        Relative tolerance used to trim tiny singular values when computing the
-        skinny SVD of ``U = D^{-1/2} F``.
+    Args:
+        d: Diagonal of ``D`` in ``Σ = D + F F^T``.
+        F: Optional factor loadings.  If ``None`` or empty then ``Σ`` is purely diagonal and the action reduces to simple scaling by ``D^{-1/2}``.
+        d_floor: Lower bound applied element-wise to ``d`` to avoid singularities.
+        sv_tol: Relative tolerance used to trim tiny singular values when computing the skinny SVD of ``U = D^{-1/2} F``.
     """
 
     d: ArrayLike
@@ -106,7 +99,6 @@ class WoodburyWeight:
 
     def W_apply(self, T: np.ndarray) -> np.ndarray:
         """Apply ``W`` to an ``(N, K)`` array row-by-row."""
-
         T = np.asarray(T, dtype=float)
         cols = (self._D_isqrt[:, None]) * T.T
         out = self._apply_m_inv_half(cols)
@@ -114,7 +106,6 @@ class WoodburyWeight:
 
     def WT_apply(self, T: np.ndarray) -> np.ndarray:
         """Apply the adjoint ``W.T`` to an ``(N, K)`` array row-by-row."""
-
         T = np.asarray(T, dtype=float)
         cols = self._apply_m_inv_half(T.T)
         cols = (self._D_isqrt[:, None]) * cols
@@ -174,14 +165,26 @@ def solve_gls_weighted(
     ``alsgls`` package.  The solver works directly with the GLS geometry and
     therefore avoids squaring the condition number of ``X``.
 
-    Returns
-    -------
-    beta:
-        The concatenated coefficient vector.
-    info:
-        Diagnostics returned by the underlying Krylov solver.
-    """
+    Args:
+        X_dot: Callback applying the stacked design to a coefficient vector.
+        X_Tdot: Callback applying its transpose to a residual matrix.
+        y: Responses, ``(N, K)``.
+        d: Diagonal of ``D`` in ``Sigma = D + F F^T``.
+        F: Factor loadings, or None when ``Sigma`` is purely diagonal.
+        method: Krylov solver to use, ``"lsmr"`` or ``"lsqr"``.
+        atol: Absolute stopping tolerance passed to the solver.
+        btol: Relative stopping tolerance passed to the solver.
+        conlim: Condition-number limit at which the solver gives up.
+        maxiter: Iteration cap, or None for the solver's own default.
+        verbose: Print solver progress.
 
+    Returns:
+        beta: The concatenated coefficient vector.
+        info: Diagnostics returned by the underlying Krylov solver.
+
+    Raises:
+        ValueError: If ``method`` is neither ``"lsmr"`` nor ``"lsqr"``.
+    """
     y = np.asarray(y, dtype=float)
     N, K = y.shape
 
@@ -234,7 +237,6 @@ def solve_gls_weighted(
 
 def make_block_design_ops(X_blocks: Sequence[np.ndarray]):
     """Build ``X_dot``/``X_Tdot`` callbacks for SUR-style block designs."""
-
     X_blocks = [np.asarray(X, dtype=float) for X in X_blocks]
     K = len(X_blocks)
     if K == 0:

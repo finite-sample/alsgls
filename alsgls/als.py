@@ -38,8 +38,8 @@ def als_gls(
     scale_floor: float = 1e-8,
     rel_tol: float = 1e-6,
 ) -> tuple[list[np.ndarray], np.ndarray, np.ndarray, float, dict[str, Any]]:
-    """
-    Alternating-least-squares GLS with low-rank-plus-diagonal covariance.
+    """Alternating-least-squares GLS with low-rank-plus-diagonal covariance.
+
     Uses Woodbury throughout; never materializes K×K dense Σ.
 
     Enhancements (correctness-first):
@@ -51,32 +51,35 @@ def als_gls(
       - Backtracking/damped acceptance on (F, D) to accept only NLL-improving updates.
       - Dual traces in `info`: nll_beta_trace (post-β), nll_trace/nll_sigma_trace (post-Σ).
 
-    Parameters
-    ----------
-    Xs : list of (N×p_j) arrays   (length K)
-    Y  : (N×K) array
-    k  : int                      rank of low-rank component (F: K×k)
-    lam_F : float                 ridge for U/F ALS updates
-    lam_B : float                 ridge for β-step (per-equation)
-    sweeps : int                  max ALS sweeps
-    d_floor : float               min variance for D to ensure SPD
-    cg_maxit : int                max CG iterations in β-step
-    cg_tol : float                CG relative tolerance
-    scale_correct : bool          if True, try guarded MLE scale fix on Σ each sweep
-    scale_floor : float           min scalar for scale correction
-    rel_tol : float               relative NLL improvement threshold for early stopping
+    Args:
+        Xs: One design matrix per equation, each ``(N, p_j)``. The equations may
+            have different numbers of regressors.
+        Y: Responses, ``(N, K)``, one column per equation.
+        k: Rank of the latent factor block. The covariance is modelled as
+            ``F F^T + D`` with ``F`` of shape ``(K, k)``, so ``k`` controls how
+            much cross-equation dependence is shared; ``k << K`` is the point.
+        lam_F: Ridge penalty on the factor loadings ``F``.
+        lam_B: Ridge penalty on the coefficients ``beta``.
+        sweeps: Maximum number of alternating passes over ``beta`` and
+            ``(F, D)``.
+        d_floor: Smallest permitted diagonal variance, which keeps ``D`` positive
+            definite and the Woodbury inverse well conditioned.
+        cg_maxit: Iteration cap for the conjugate-gradient solve in the beta step.
+        cg_tol: Relative residual tolerance for that solve.
+        scale_correct: Apply the guarded MLE scale correction to ``Sigma`` each
+            sweep. The correction is reverted when it does not improve the
+            negative log-likelihood.
+        scale_floor: Smallest permitted scale factor, so the correction cannot
+            collapse ``Sigma`` toward zero.
+        rel_tol: Relative decrease in the negative log-likelihood below which the
+            sweeps stop early.
 
-    Returns
-    -------
-    B_list, F, D, mem_MB_est, info
-      info includes:
-        - p_list
-        - cg (last sweep)
-        - nll_trace          (post-Σ, non-increasing)
-        - nll_sigma_trace    (alias of nll_trace)
-        - nll_beta_trace     (post-β baseline per sweep)
-        - accept_t           (list of accepted backtracking t)
-        - scale_used         (list of accepted scale factors, 1.0 if not applied)
+    Returns:
+        B_list, F, D, mem_MB_est, info: info includes: - p_list - cg (last sweep) - nll_trace          (post-Σ, non-increasing) - nll_sigma_trace    (alias of nll_trace) - nll_beta_trace     (post-β baseline per sweep) - accept_t           (list of accepted backtracking t) - scale_used         (list of accepted scale factors, 1.0 if not applied)
+
+    Raises:
+        np.linalg.LinAlgError: If a Cholesky factorisation of the Woodbury
+            core fails, which means the current Sigma is not positive definite.
     """
     # ----------------------------
     # Input validation

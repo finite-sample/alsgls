@@ -11,15 +11,17 @@ def mse(Y: np.ndarray, Yhat: np.ndarray) -> float:
 
 
 def nll_per_row(R: np.ndarray, F: np.ndarray, D: np.ndarray) -> float:
-    """
-    Negative log-likelihood per row for residual matrix ``R`` under
-    Σ = F F^T + diag(D) with Gaussian errors.
+    """Negative log-likelihood per row for a residual matrix.
 
-    Returns
-    -------
-    float
-        0.5 * [ tr(R Σ^{-1} R^T)/N + log det(Σ) + K log(2π) ]
-        where N is the number of rows in R.
+    Computed for ``R`` under Σ = F F^T + diag(D) with Gaussian errors.
+
+    Args:
+        R: Residual matrix, ``(N, K)``.
+        F: Factor loadings, ``(K, k)``.
+        D: Diagonal variances, length ``K``.
+
+    Returns:
+        float: 0.5 * [ tr(R Σ^{-1} R^T)/N + log det(Σ) + K log(2π) ] where N is the number of rows in R.
     """
     N, K = R.shape
     # Woodbury factors

@@ -7,8 +7,7 @@ import numpy as np
 
 
 def woodbury_chol(F: np.ndarray, D: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    """
-    Return (Dinv, C_chol) where C_chol is the Cholesky factor of C = I + F^T D^{-1} F.
+    """Return (Dinv, C_chol) where C_chol is the Cholesky factor of C = I + F^T D^{-1} F.
 
     Intended for numerically stable downstream solves that avoid forming C^{-1} explicitly.
     """
@@ -22,19 +21,14 @@ def woodbury_chol(F: np.ndarray, D: np.ndarray) -> tuple[np.ndarray, np.ndarray]
 
 
 def _right_solve_with_C(T: np.ndarray, C_chol: np.ndarray) -> np.ndarray:
-    """
-    Solve (I + F^T D^{-1} F)^{-1} T for multiple RHS given the Cholesky factor.
+    """Solve (I + F^T D^{-1} F)^{-1} T for multiple RHS given the Cholesky factor.
 
-    Parameters
-    ----------
-    T : (k × m) array
-        Right-hand sides (as columns).
-    C_chol : (k × k) array
-        Cholesky factor of C = I + F^T D^{-1} F.
+    Args:
+        T: Right-hand sides (as columns).
+        C_chol: Cholesky factor of C = I + F^T D^{-1} F.
 
-    Returns
-    -------
-    X : (k × m) array solving C X = T.
+    Returns:
+        X
     """
     # Solve C X = T using two triangular solves with the Cholesky factor
     # NumPy's solve works fine for triangular systems as well.
@@ -51,29 +45,21 @@ def apply_siginv_to_matrix(
     Dinv: np.ndarray | None = None,
     C_chol: np.ndarray,
 ) -> np.ndarray:
-    """
-    Right-multiply an (N×K) matrix M by Σ^{-1} using Woodbury, where
-    Σ = F F^T + diag(D).
+    """Right-multiply an (N×K) matrix M by Σ^{-1} using Woodbury.
+
+    Σ = F F^T + diag(D), which is never formed densely.
 
     Uses numerically stable Cholesky factorization approach.
 
-    Parameters
-    ----------
-    M : np.ndarray
-        (N×K) matrix to right-multiply by Σ^{-1}
-    F : np.ndarray
-        (K×k) factor loadings matrix
-    D : np.ndarray
-        (K,) diagonal noise variances
-    Dinv : np.ndarray, optional
-        Pre-computed 1/D. If None, computed from D.
-    C_chol : np.ndarray
-        Cholesky factor of C = I + F^T D^{-1} F
+    Args:
+        M: (N×K) matrix to right-multiply by Σ^{-1}
+        F: (K×k) factor loadings matrix
+        D: (K,) diagonal noise variances
+        Dinv: Pre-computed 1/D. If None, computed from D.
+        C_chol: Cholesky factor of C = I + F^T D^{-1} F
 
-    Returns
-    -------
-    np.ndarray
-        M @ Σ^{-1}
+    Returns:
+        np.ndarray: M @ Σ^{-1}
     """
     if Dinv is None:
         Dinv = 1.0 / np.clip(np.asarray(D), 1e-12, None)
@@ -115,30 +101,23 @@ def cg_solve(
     tol: float = 1e-7,
     M_pre: Callable[[np.ndarray], np.ndarray] | None = None,
 ) -> tuple[np.ndarray, dict[str, Any]]:
-    """
-    Conjugate gradient for SPD operator A (matrix-free).
+    """Conjugate gradient for SPD operator A (matrix-free).
 
-    Parameters
-    ----------
-    operator_mv : callable
-        Function that returns A @ x for a given x.
-    b : ndarray
-        Right-hand side.
-    x0 : ndarray, optional
-        Initial guess.
-    maxit : int
-        Maximum CG iterations.
-    tol : float
-        Relative residual tolerance.
-    M_pre : callable, optional
-        Preconditioner application: returns M^{-1} @ r.
+    Args:
+        operator_mv: Function that returns A @ x for a given x.
+        b: Right-hand side.
+        x0: Initial guess.
+        maxit: Maximum CG iterations.
+        tol: Relative residual tolerance.
+        M_pre: Preconditioner application: returns M^{-1} @ r.
 
-    Returns
-    -------
-    x : ndarray
-        Approximate solution.
-    info : dict
-        Iterations and final residual norm.
+    Returns:
+        x: Approximate solution.
+        info: Iterations and final residual norm.
+
+    Raises:
+        ValueError: If the operator or the preconditioner turns out not to be
+            positive definite, which conjugate gradients requires.
     """
     x = np.zeros_like(b) if x0 is None else x0.copy()
     r = b - operator_mv(x)
@@ -184,14 +163,18 @@ def cg_solve(
 
 
 def siginv_diag(F: np.ndarray, Dinv: np.ndarray, C_chol: np.ndarray) -> np.ndarray:
-    """
-    Compute the diagonal of Σ^{-1} = D^{-1} - D^{-1} F C^{-1} F^T D^{-1}
-    efficiently given Dinv and the Cholesky factor of C.
+    """Compute the diagonal of Σ^{-1} without forming the inverse.
 
-    Returns
-    -------
-    diag_Sinv : (K,) array
-        The diagonal entries of Σ^{-1}.
+    Σ^{-1} = D^{-1} - D^{-1} F C^{-1} F^T D^{-1}, evaluated from ``Dinv`` and the
+    Cholesky factor of ``C``.
+
+    Args:
+        F: Factor loadings, ``(K, k)``.
+        Dinv: Reciprocal of the diagonal variances, length ``K``.
+        C_chol: Cholesky factor of the ``k x k`` Woodbury core.
+
+    Returns:
+        diag_Sinv: The diagonal entries of Σ^{-1}.
     """
     # Compute C^{-1} F^T via two triangular solves
     Cinv_Ft = _right_solve_with_C(F.T, C_chol)  # (k × K)
@@ -202,24 +185,17 @@ def siginv_diag(F: np.ndarray, Dinv: np.ndarray, C_chol: np.ndarray) -> np.ndarr
 
 
 def apply_siginv_F(F: np.ndarray, Dinv: np.ndarray, C_chol: np.ndarray) -> np.ndarray:
-    """
-    Compute Σ^{-1} @ F efficiently using Woodbury.
+    """Compute Σ^{-1} @ F efficiently using Woodbury.
 
     Σ^{-1} @ F = D^{-1} F - D^{-1} F C^{-1} F^T D^{-1} F
 
-    Parameters
-    ----------
-    F : (K, k) array
-        Factor loadings
-    Dinv : (K,) array
-        Inverse diagonal
-    C_chol : (k, k) array
-        Cholesky factor of C = I + F^T D^{-1} F
+    Args:
+        F: Factor loadings
+        Dinv: Inverse diagonal
+        C_chol: Cholesky factor of C = I + F^T D^{-1} F
 
-    Returns
-    -------
-    SinvF : (K, k) array
-        Σ^{-1} @ F
+    Returns:
+        SinvF: Σ^{-1} @ F
     """
     # D^{-1} F
     DinvF = Dinv[:, None] * F  # K × k
@@ -242,8 +218,7 @@ def compute_XtSigmaInvX(
     D: np.ndarray,
     lam_B: float = 0.0,
 ) -> np.ndarray:
-    """
-    Compute (X'Σ⁻¹X + λI) using the Woodbury identity.
+    """Compute (X'Σ⁻¹X + λI) using the Woodbury identity.
 
     For GLS with Σ = FF' + diag(D), we need the precision-weighted design
     matrix cross-product for computing coefficient standard errors:
@@ -255,21 +230,14 @@ def compute_XtSigmaInvX(
     The block structure gives:
         [X'Σ⁻¹X]_{jl} = X_j' [Σ⁻¹]_{jl} X_l
 
-    Parameters
-    ----------
-    Xs : list of np.ndarray
-        List of design matrices [X_0, ..., X_{K-1}] where X_j is (N, p_j)
-    F : np.ndarray
-        (K, k) factor loadings matrix
-    D : np.ndarray
-        (K,) diagonal noise variances
-    lam_B : float
-        Ridge penalty to add to diagonal (for regularization)
+    Args:
+        Xs: List of design matrices [X_0, ..., X_{K-1}] where X_j is (N, p_j)
+        F: (K, k) factor loadings matrix
+        D: (K,) diagonal noise variances
+        lam_B: Ridge penalty to add to diagonal (for regularization)
 
-    Returns
-    -------
-    XtSinvX : np.ndarray
-        (p_total, p_total) matrix where p_total = sum(p_j)
+    Returns:
+        XtSinvX: (p_total, p_total) matrix where p_total = sum(p_j)
     """
     K = len(Xs)
     p_list = [X.shape[1] for X in Xs]
@@ -324,8 +292,7 @@ def grad_F_nll(
     C_chol: np.ndarray,
     lam_F: float = 0.0,
 ) -> np.ndarray:
-    """
-    Compute gradient of NLL w.r.t. F using Woodbury algebra.
+    """Compute gradient of NLL w.r.t. F using Woodbury algebra.
 
     The NLL is: L = 0.5 * [tr(R Σ^{-1} R^T)/N + log|Σ| + K log(2π)]
 
@@ -334,25 +301,16 @@ def grad_F_nll(
 
     where S = R^T R / N is the sample covariance.
 
-    Parameters
-    ----------
-    R : (N, K) array
-        Residual matrix
-    F : (K, k) array
-        Factor loadings
-    D : (K,) array
-        Diagonal variances (used for Σ = F F^T + diag(D))
-    Dinv : (K,) array
-        Pre-computed 1/D
-    C_chol : (k, k) array
-        Cholesky factor of C = I + F^T D^{-1} F
-    lam_F : float
-        Ridge penalty on F
+    Args:
+        R: Residual matrix
+        F: Factor loadings
+        D: Diagonal variances (used for Σ = F F^T + diag(D))
+        Dinv: Pre-computed 1/D
+        C_chol: Cholesky factor of C = I + F^T D^{-1} F
+        lam_F: Ridge penalty on F
 
-    Returns
-    -------
-    grad : (K, k) array
-        Gradient of NLL w.r.t. F
+    Returns:
+        grad: Gradient of NLL w.r.t. F
     """
     N, _ = R.shape
 
@@ -384,31 +342,24 @@ def compute_prediction_variance(
     cov_params: np.ndarray,
     include_residual: bool = True,
 ) -> np.ndarray:
-    """
-    Compute prediction variances for new observations.
+    """Compute prediction variances for new observations.
 
     For each observation i and equation j:
     - Var(E[y_j|X]) = X_j[i,:] @ Cov(β̂_j) @ X_j[i,:]
     - Var(y_j|X) = Var(E[y_j|X]) + Σ_jj where Σ_jj = ||F[j,:]||² + D[j]
 
-    Parameters
-    ----------
-    Xs : Sequence of np.ndarray
-        List of design matrices [X_0, ..., X_{K-1}] where X_j is (N_new, p_j)
-    F : np.ndarray
-        (K, k) factor loadings matrix
-    D : np.ndarray
-        (K,) diagonal noise variances
-    cov_params : np.ndarray
-        (p_total, p_total) covariance matrix of parameter estimates
-    include_residual : bool
-        If True, add Σ_jj (residual variance) for prediction intervals.
-        If False, return only variance of mean prediction (confidence intervals).
+    Args:
+        Xs: List of design matrices [X_0, ..., X_{K-1}] where X_j is (N_new, p_j)
+        F: (K, k) factor loadings matrix
+        D: (K,) diagonal noise variances
+        cov_params: (p_total, p_total) covariance matrix of parameter estimates
+        include_residual: If True, add Σ_jj (residual variance) for prediction intervals. If False, return only variance of mean prediction (confidence intervals).
 
-    Returns
-    -------
-    var_pred : np.ndarray
-        (N_new, K) array of prediction variances
+    Returns:
+        var_pred: (N_new, K) array of prediction variances
+
+    Raises:
+        ValueError: If ``Xs`` is empty.
     """
     K = len(Xs)
     if K == 0:

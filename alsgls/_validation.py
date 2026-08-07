@@ -14,22 +14,15 @@ import numpy as np
 def _validate_design_matrices(Xs: Any, *, name: str = "Xs") -> list[np.ndarray]:
     """Validate and convert design matrices to standardized format.
 
-    Parameters
-    ----------
-    Xs : list-like
-        List of design matrices, each should be array-like.
-    name : str, optional
-        Variable name for error messages.
+    Args:
+        Xs: List of design matrices, each should be array-like.
+        name: Variable name for error messages.
 
-    Returns
-    -------
-    list[np.ndarray]
-        Validated list of 2D numpy arrays.
+    Returns:
+        list[np.ndarray]: Validated list of 2D numpy arrays.
 
-    Raises
-    ------
-    ValueError
-        If Xs is empty, not list-like, or contains invalid matrices.
+    Raises:
+        ValueError: If Xs is empty, not list-like, or contains invalid matrices.
     """
     if not isinstance(Xs, (list, tuple)) or len(Xs) == 0:
         raise ValueError(
@@ -60,22 +53,15 @@ def _validate_design_matrices(Xs: Any, *, name: str = "Xs") -> list[np.ndarray]:
 def _validate_response_matrix(Y: Any, *, name: str = "Y") -> np.ndarray:
     """Validate and convert response matrix to standardized format.
 
-    Parameters
-    ----------
-    Y : array-like
-        Response matrix, should be 2D or convertible to 2D.
-    name : str, optional
-        Variable name for error messages.
+    Args:
+        Y: Response matrix, should be 2D or convertible to 2D.
+        name: Variable name for error messages.
 
-    Returns
-    -------
-    np.ndarray
-        Validated 2D numpy array.
+    Returns:
+        np.ndarray: Validated 2D numpy array.
 
-    Raises
-    ------
-    ValueError
-        If Y cannot be converted to a 2D array.
+    Raises:
+        ValueError: If Y cannot be converted to a 2D array.
     """
     try:
         Y_arr = np.asarray(Y, dtype=np.float64)
@@ -98,19 +84,14 @@ def _check_array_compatibility(
 ) -> None:
     """Check that design matrices and response have compatible dimensions.
 
-    Parameters
-    ----------
-    Xs : list[np.ndarray]
-        Validated design matrices.
-    Y : np.ndarray
-        Validated response matrix.
-    X_name, Y_name : str, optional
-        Variable names for error messages.
+    Args:
+        Xs: Validated design matrices.
+        Y: Validated response matrix.
+        X_name: Name of the design-matrix argument, for error messages.
+        Y_name: Name of the response argument, for error messages.
 
-    Raises
-    ------
-    ValueError
-        If dimensions are incompatible.
+    Raises:
+        ValueError: If dimensions are incompatible.
     """
     N, K = Y.shape
 
@@ -131,26 +112,17 @@ def _check_array_compatibility(
 def _validate_rank_parameter(k: Any, N: int, K: int, *, name: str = "k") -> int:
     """Validate and convert rank parameter.
 
-    Parameters
-    ----------
-    k : int-like
-        Rank parameter for low-rank component.
-    N : int
-        Number of samples.
-    K : int
-        Number of equations.
-    name : str, optional
-        Parameter name for error messages.
+    Args:
+        k: Rank parameter for low-rank component.
+        N: Number of samples.
+        K: Number of equations.
+        name: Parameter name for error messages.
 
-    Returns
-    -------
-    int
-        Validated rank parameter.
+    Returns:
+        int: Validated rank parameter.
 
-    Raises
-    ------
-    ValueError
-        If k is not a valid rank.
+    Raises:
+        ValueError: If k is not a valid rank.
     """
     try:
         k_int = int(k)
@@ -175,22 +147,15 @@ def _sanitize_regularization_params(
 ) -> tuple[float, float]:
     """Validate and sanitize regularization parameters.
 
-    Parameters
-    ----------
-    lam_F : float, optional
-        Regularization for factor loadings.
-    lam_B : float, optional
-        Regularization for regression coefficients.
+    Args:
+        lam_F: Regularization for factor loadings.
+        lam_B: Regularization for regression coefficients.
 
-    Returns
-    -------
-    tuple[float, float]
-        Validated (lam_F, lam_B) parameters.
+    Returns:
+        tuple[float, float]: Validated (lam_F, lam_B) parameters.
 
-    Raises
-    ------
-    ValueError
-        If regularization parameters are negative.
+    Raises:
+        ValueError: If regularization parameters are negative.
     """
     if lam_F is not None:
         if not isinstance(lam_F, (int, float)) or lam_F < 0:
@@ -221,21 +186,15 @@ def _validate_gls_inputs(
 
     This function combines all individual validation steps for consistency.
 
-    Parameters
-    ----------
-    Xs : list-like
-        Design matrices.
-    Y : array-like
-        Response matrix.
-    k : int-like
-        Rank parameter.
-    lam_F, lam_B : float, optional
-        Regularization parameters.
+    Args:
+        Xs: Design matrices.
+        Y: Response matrix.
+        k: Rank parameter.
+        lam_F: Ridge penalty on the factor loadings.
+        lam_B: Ridge penalty on the coefficients.
 
-    Returns
-    -------
-    tuple
-        Validated (Xs, Y, k, lam_F, lam_B).
+    Returns:
+        tuple: Validated (Xs, Y, k, lam_F, lam_B).
     """
     # Step 1: Validate individual components
     Xs_valid = _validate_design_matrices(Xs)
@@ -255,21 +214,18 @@ def _validate_convergence_params(
 ) -> dict[str, int | float]:
     """Validate convergence and solver parameters.
 
-    Parameters
-    ----------
-    sweeps : int, optional
-        Maximum number of ALS sweeps.
-    rel_tol : float, optional
-        Relative tolerance for convergence.
-    cg_maxit : int, optional
-        Maximum CG iterations.
-    cg_tol : float, optional
-        CG tolerance.
+    Args:
+        sweeps: Maximum number of ALS sweeps.
+        rel_tol: Relative tolerance for convergence.
+        cg_maxit: Maximum CG iterations.
+        cg_tol: CG tolerance.
 
-    Returns
-    -------
-    dict
-        Validated parameters.
+    Returns:
+        dict: Validated parameters.
+
+    Raises:
+        ValueError: If ``sweeps`` or ``cg_maxit`` is not a positive integer,
+            ``rel_tol`` is negative, or ``cg_tol`` is not positive.
     """
     params: dict[str, int | float] = {}
 

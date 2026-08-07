@@ -25,8 +25,7 @@ def select_rank_bic(
     k_candidates: list[int] | None = None,
     **als_kwargs: Any,
 ) -> tuple[int, list[dict[str, Any]]]:
-    """
-    Select rank by minimizing BIC (Bayesian Information Criterion).
+    """Select rank by minimizing BIC (Bayesian Information Criterion).
 
     BIC(k) = N * nll_per_row + (n_params / 2) * log(N)
 
@@ -34,23 +33,18 @@ def select_rank_bic(
     - F: K × k loadings
     - D: K diagonal variances
 
-    Parameters
-    ----------
-    Xs : list of (N, p_j) arrays
-        Design matrices for each equation.
-    Y : (N, K) array
-        Response matrix.
-    k_candidates : list of int, optional
-        Candidate ranks to evaluate. Defaults to range(1, min(K//2, 12)+1).
-    **als_kwargs
-        Additional arguments passed to als_gls().
+    Args:
+        Xs: Design matrices for each equation.
+        Y: Response matrix.
+        k_candidates: Candidate ranks to evaluate. Defaults to range(1, min(K//2, 12)+1).
+        **als_kwargs: Additional arguments passed to als_gls().
 
-    Returns
-    -------
-    best_k : int
-        The rank with minimum BIC.
-    results : list of dict
-        Per-rank results containing 'k', 'nll', 'bic', 'n_params'.
+    Returns:
+        best_k: The rank with minimum BIC.
+        results: Per-rank results containing 'k', 'nll', 'bic', 'n_params'.
+
+    Raises:
+        RuntimeError: If no candidate rank produced a usable fit.
     """
     N, K = Y.shape
     if k_candidates is None:
@@ -91,30 +85,23 @@ def select_rank_cv(
     random_state: int | np.random.Generator | None = None,
     **als_kwargs: Any,
 ) -> tuple[int, list[dict[str, Any]]]:
-    """
-    Select rank by k-fold cross-validation on validation NLL.
+    """Select rank by k-fold cross-validation on validation NLL.
 
-    Parameters
-    ----------
-    Xs : list of (N, p_j) arrays
-        Design matrices for each equation.
-    Y : (N, K) array
-        Response matrix.
-    k_candidates : list of int, optional
-        Candidate ranks to evaluate. Defaults to range(1, min(K//2, 12)+1).
-    n_folds : int, default=5
-        Number of cross-validation folds.
-    random_state : int or Generator, optional
-        Random state for reproducible fold splits.
-    **als_kwargs
-        Additional arguments passed to als_gls().
+    Args:
+        Xs: Design matrices for each equation.
+        Y: Response matrix.
+        k_candidates: Candidate ranks to evaluate. Defaults to range(1, min(K//2, 12)+1).
+        n_folds: Number of cross-validation folds.
+        random_state: Random state for reproducible fold splits.
+        **als_kwargs: Additional arguments passed to als_gls().
 
-    Returns
-    -------
-    best_k : int
-        The rank with minimum mean CV NLL.
-    results : list of dict
-        Per-rank results containing 'k', 'cv_nll', 'cv_std', 'fold_nlls'.
+    Returns:
+        best_k: The rank with minimum mean CV NLL.
+        results: Per-rank results containing 'k', 'cv_nll', 'cv_std', 'fold_nlls'.
+
+    Raises:
+        ValueError: If ``n_folds`` is below 2 or exceeds the number of rows.
+        RuntimeError: If no candidate rank produced a usable fit.
     """
     N, K = Y.shape
     if k_candidates is None:
