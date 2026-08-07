@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""
-Real data example: Fama-French 49 Industry Portfolios
+"""Real data example: Fama-French 49 industry portfolios.
 
 Demonstrates ALS-GLS on correlated industry returns where:
 - K=49 equations (one per industry)

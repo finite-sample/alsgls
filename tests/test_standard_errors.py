@@ -353,20 +353,34 @@ class TestPredictionIntervalsSystemResults:
 
         assert pred.predicted_mean.shape == (results.model.nobs, K)
 
-    def test_asymptotic_coverage(self, model_and_data):
-        """95% prediction intervals should have ~95% coverage."""
+    def test_most_observations_land_inside_the_interval(self, model_and_data):
+        """A smoke check that the intervals are not absurdly narrow.
+
+        This used to be called ``test_asymptotic_coverage`` and asserted
+        ``coverage > 0.80`` for a nominal 95% interval, which it could not
+        support. The rate was computed from a *single* fitted model by pooling
+        ``N_te * K`` prediction points; those points are all downstream of one
+        draw of one dataset, so pooling them multiplies the apparent sample size
+        without adding information and makes a badly calibrated interval look
+        precisely measured. It was also one-sided: an interval covering 100% of
+        the time -- far too wide -- passed it.
+
+        The real coverage study is
+        ``tests/test_econometrics.py::test_prediction_intervals_cover_at_the_nominal_rate``:
+        400 refits, one held-out point each, gated on a binomial band derived
+        from the replicate count. It measures 0.9425 against a nominal 0.95.
+
+        What survives here is only what a single fit can honestly support -- that
+        the intervals are in the right ballpark -- and it is named for that.
+        """
         results, Xs_te, Y_te, K, _N_te = model_and_data
         exog = {f"eq{j}": Xs_te[j] for j in range(K)}
 
         pred = results.get_prediction(exog)
         ci = pred.conf_int_obs(alpha=0.05)
 
-        lower = ci[:, :, 0]
-        upper = ci[:, :, 1]
-        in_interval = (Y_te >= lower) & (Y_te <= upper)
-        coverage = in_interval.mean()
-
-        assert coverage > 0.80, f"Coverage {coverage:.2%} is too low"
+        inside = ((Y_te >= ci[:, :, 0]) & (Y_te <= ci[:, :, 1])).mean()
+        assert 0.80 < inside < 1.0, f"{inside:.2%} of points inside the interval"
 
     def test_smaller_alpha_gives_wider_intervals(self, model_and_data):
         """Smaller alpha (e.g., 0.01) should give wider intervals."""
@@ -415,7 +429,7 @@ class TestPredictionIntervalsALSGLS:
         assert result["upper"].shape == (N_te, K)
 
     def test_predict_interval_ordering(self, fitted_alsgls):
-        """lower < mean < upper should hold."""
+        """Lower < mean < upper should hold."""
         model, Xs_te, _Y_te, _K, _N_te = fitted_alsgls
 
         result = model.predict_interval(Xs_te)
