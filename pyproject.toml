@@ -18,12 +18,12 @@ classifiers = [
 ]
 dependencies = [
   "numpy>=1.21",
-  "scipy>=1.0",
+  "scipy>=1.17.1",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=7.0", "scipy>=1.0"]
-lsqr = ["scipy>=1.0"]
+dev = ["pytest>=9.1.1", "scipy>=1.17.1"]
+lsqr = ["scipy>=1.17.1"]
 pandas = ["pandas>=1.0"]
 docs = [
   "sphinx>=7.0",
@@ -41,8 +41,8 @@ dev = [
   # Monte Carlo test machinery. A dependency-group, not an extra: a direct
   # URL in published metadata is rejected by PyPI.
   "simcheck @ git+https://github.com/finite-sample/simcheck",
-  "pytest>=7.0", "pytest-cov>=4.0", "ruff>=0.7.0", "mypy>=1.0", "pre-commit>=3.0", "deptry>=0.12.0"]
-test = ["simcheck @ git+https://github.com/finite-sample/simcheck", "pytest>=7.0", "pytest-cov>=4.0"]
+  "pytest>=9.1.1", "pytest-cov>=7.1.0", "ruff>=0.16.1", "mypy>=1.0", "pre-commit>=4.6.1", "deptry>=0.25.1"]
+test = ["simcheck @ git+https://github.com/finite-sample/simcheck", "pytest>=9.1.1", "pytest-cov>=7.1.0"]
 
 [tool.deptry]
 # Ignore files/directories that aren't part of the main package
