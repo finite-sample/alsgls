@@ -26,7 +26,7 @@ dev = ["pytest>=7.0", "scipy>=1.0"]
 lsqr = ["scipy>=1.0"]
 pandas = ["pandas>=1.0"]
 docs = [
-  "sphinx>=7.0",
+  "sphinx>=9.0.4",
   "furo",
   "sphinx-autodoc-typehints",
   "myst-parser>=2.0",
