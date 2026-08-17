@@ -41,7 +41,7 @@ dev = [
   # Monte Carlo test machinery. A dependency-group, not an extra: a direct
   # URL in published metadata is rejected by PyPI.
   "simcheck @ git+https://github.com/finite-sample/simcheck",
-  "pytest>=9.1.1", "pytest-cov>=7.1.0", "ruff>=0.16.1", "mypy>=1.0", "pre-commit>=4.6.1", "deptry>=0.25.1"]
+  "pytest>=9.1.1", "pytest-cov>=7.1.0", "ruff>=0.16.2", "mypy>=1.0", "pre-commit>=4.6.2", "deptry>=0.25.1"]
 test = ["simcheck @ git+https://github.com/finite-sample/simcheck", "pytest>=9.1.1", "pytest-cov>=7.1.0"]
 
 [tool.deptry]
