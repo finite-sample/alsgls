@@ -24,7 +24,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = ["pytest>=9.1.1", "scipy>=1.17.1"]
 lsqr = ["scipy>=1.17.1"]
-pandas = ["pandas>=1.0"]
+pandas = ["pandas>=3.0.5"]
 docs = [
   "sphinx>=7.0",
   "furo",
