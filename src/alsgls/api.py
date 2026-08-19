@@ -25,10 +25,7 @@ def _auto_rank(num_equations: int) -> int:
 
 def _asarray_2d(x: Any, *, dtype: Any = np.float64) -> np.ndarray:
     """Convert array-like input to a 2D ``numpy.ndarray``."""
-    if hasattr(x, "to_numpy"):
-        arr = x.to_numpy()
-    else:
-        arr = np.asarray(x)
+    arr = x.to_numpy() if hasattr(x, "to_numpy") else np.asarray(x)
     arr = np.asarray(arr, dtype=dtype)
     if arr.ndim == 1:
         arr = arr[:, None]
@@ -50,24 +47,7 @@ def _eq_name(name: Any, index: int) -> str:
 
 
 class ALSGLS:
-    """Scikit-learn style estimator for low-rank GLS via ALS.
-
-    Args:
-        rank: Rank of the low-rank factor structure. Options: - int: Fixed rank value - "auto": Heuristic based on K (default) - "bic": Select via BIC minimization - "cv": Select via cross-validation - None: Same as "auto"
-        rank_candidates: Candidate ranks for "bic" or "cv" selection.
-        cv_folds: Number of folds for "cv" rank selection.
-        cv_random_state: Random state for CV fold splits.
-        lam_F: Ridge penalty on the factor loadings.
-        lam_B: Ridge penalty on the coefficients.
-        max_sweeps: Maximum number of alternating sweeps.
-        rel_tol: Relative decrease in the negative log-likelihood below which
-            the sweeps stop early.
-        d_floor: Smallest permitted diagonal variance.
-        cg_maxit: Iteration cap for the conjugate-gradient solve.
-        cg_tol: Relative residual tolerance for that solve.
-        scale_correct: Apply the guarded MLE scale correction to Sigma.
-        scale_floor: Smallest permitted scale factor for that correction.
-    """
+    """Scikit-learn style estimator for low-rank GLS via ALS."""
 
     def __init__(
         self,
@@ -86,6 +66,27 @@ class ALSGLS:
         scale_correct: bool = True,
         scale_floor: float = 1e-8,
     ) -> None:
+        """Store the estimator hyperparameters.
+
+        Args:
+            rank: Rank of the low-rank factor structure. An int fixes the
+                rank; "auto" (the default, also used for None) picks a
+                heuristic based on K; "bic" selects via BIC minimization;
+                "cv" selects via cross-validation.
+            rank_candidates: Candidate ranks for "bic" or "cv" selection.
+            cv_folds: Number of folds for "cv" rank selection.
+            cv_random_state: Random state for CV fold splits.
+            lam_F: Ridge penalty on the factor loadings.
+            lam_B: Ridge penalty on the coefficients.
+            max_sweeps: Maximum number of alternating sweeps.
+            rel_tol: Relative decrease in the negative log-likelihood below
+                which the sweeps stop early.
+            d_floor: Smallest permitted diagonal variance.
+            cg_maxit: Iteration cap for the conjugate-gradient solve.
+            cg_tol: Relative residual tolerance for that solve.
+            scale_correct: Apply the guarded MLE scale correction to Sigma.
+            scale_floor: Smallest permitted scale factor for that correction.
+        """
         self.rank = rank
         self.rank_candidates = rank_candidates
         self.cv_folds = cv_folds
@@ -103,7 +104,8 @@ class ALSGLS:
     # ------------------------------------------------------------------
     # Scikit-learn estimator protocol
     # ------------------------------------------------------------------
-    def get_params(self, deep: bool = True) -> dict[str, Any]:  # noqa: ARG002, D401
+    def get_params(self, deep: bool = True) -> dict[str, Any]:  # noqa: ARG002
+        """Return the estimator hyperparameters (scikit-learn protocol)."""
         return {
             "rank": self.rank,
             "rank_candidates": self.rank_candidates,
@@ -120,7 +122,8 @@ class ALSGLS:
             "scale_floor": self.scale_floor,
         }
 
-    def set_params(self, **params: Any) -> ALSGLS:  # noqa: D401 - sklearn API
+    def set_params(self, **params: Any) -> ALSGLS:
+        """Set estimator hyperparameters in place (scikit-learn protocol)."""
         for key, value in params.items():
             if not hasattr(self, key):
                 raise ValueError(f"Unknown parameter {key!r}")
@@ -145,6 +148,7 @@ class ALSGLS:
         }
 
     def fit(self, Xs: Sequence[Any], Y: Any) -> ALSGLS:
+        """Fit the GLS system, selecting the rank first when requested."""
         X_list = [_asarray_2d(X) for X in Xs]
         Y_arr = _asarray_2d(Y)
 
@@ -215,6 +219,7 @@ class ALSGLS:
         return max(n_total - sum(self.n_features_in_), 1)
 
     def predict(self, Xs: Sequence[Any]) -> np.ndarray:
+        """Predict responses for new design matrices, one per equation."""
         self._ensure_fitted()
         X_list = [_asarray_2d(X) for X in Xs]
         if len(X_list) != len(self.B_list_):
@@ -227,6 +232,7 @@ class ALSGLS:
         return XB_from_Blist(X_list, self.B_list_)
 
     def score(self, Xs: Sequence[Any], Y: Any) -> float:
+        """Return the negative mean squared error of predictions on (Xs, Y)."""
         self._ensure_fitted()
         Y_arr = _asarray_2d(Y)
         if Y_arr.shape[1] != self.n_targets_:
@@ -264,7 +270,9 @@ class ALSGLS:
         Args:
             Xs: List of design matrices [X_0, ..., X_{K-1}] for new observations.
             alpha: Significance level (default 0.05 for 95% intervals).
-            return_type: "prediction" for prediction intervals (includes residual variance), "confidence" for confidence intervals (variance of E[y|X] only).
+            return_type: "prediction" for prediction intervals (includes
+                residual variance), "confidence" for confidence intervals
+                (variance of E[y|X] only).
 
         Returns:
             dict: {"mean": (N, K), "lower": (N, K), "upper": (N, K)}
@@ -378,10 +386,8 @@ class ALSGLSSystem:
         scale_correct: bool = True,
         scale_floor: float = 1e-8,
     ) -> None:
-        if isinstance(system, Mapping):
-            items = list(system.items())
-        else:
-            items = list(system)
+        """Parse and validate the equation system; see the class docstring."""
+        items = list(system.items()) if isinstance(system, Mapping) else list(system)
         if len(items) == 0:
             raise ValueError("system must contain at least one equation")
 
@@ -422,19 +428,28 @@ class ALSGLSSystem:
         self.scale_floor = scale_floor
 
     @property
+    def equations(self) -> list[_SystemEquation]:
+        """The parsed equations, in system order."""
+        return self._equations
+
+    @property
     def nobs(self) -> int:
+        """Number of observations shared by every equation."""
         return self._equations[0].y.shape[0]
 
     @property
     def keqs(self) -> int:
+        """Number of equations in the system."""
         return len(self._equations)
 
     def as_arrays(self) -> tuple[list[np.ndarray], np.ndarray]:
+        """Return the system as (list of X_j, stacked Y) arrays."""
         Xs = [eq.X for eq in self._equations]
         Y = np.column_stack([eq.y for eq in self._equations])
         return Xs, Y
 
     def fit(self) -> ALSGLSSystemResults:
+        """Fit the system with ALS-GLS and return a results container."""
         estimator = ALSGLS(
             rank=self.rank,
             lam_F=self.lam_F,
@@ -459,6 +474,7 @@ class ALSGLSSystemResults:
     """Lightweight results container mimicking ``statsmodels`` outputs."""
 
     def __init__(self, model: ALSGLSSystem, estimator: ALSGLS) -> None:
+        """Collect fitted quantities from the model and estimator."""
         self.model = model
         self.estimator = estimator
         Xs, Y = model.as_arrays()
@@ -466,7 +482,7 @@ class ALSGLSSystemResults:
         flattened = [b.ravel() for b in estimator.B_list_ if b.size]
         self.params = np.concatenate(flattened) if flattened else np.empty(0)
         self.param_labels = [
-            (eq.name, col) for eq in model._equations for col in eq.column_names
+            (eq.name, col) for eq in model.equations for col in eq.column_names
         ]
         self.B_list = estimator.B_list_
         self.F = estimator.F_
@@ -481,8 +497,9 @@ class ALSGLSSystemResults:
         self.loglike = -self.nll_per_row * self.model.nobs
 
     def params_as_series(self):
+        """Return coefficients as a pandas Series with (equation, variable) index."""
         try:
-            import pandas as pd  # type: ignore
+            import pandas as pd  # type: ignore[import-not-found]
         except ImportError as exc:  # pragma: no cover - optional dependency
             raise RuntimeError("pandas is required for params_as_series()") from exc
 
@@ -494,17 +511,18 @@ class ALSGLSSystemResults:
     def predict(
         self, exog: Mapping[Any, Any] | Sequence[Any] | None = None
     ) -> np.ndarray:
+        """Predict fitted values, for the training design or new ``exog``."""
         if exog is None:
-            Xs = [eq.X for eq in self.model._equations]
+            Xs = [eq.X for eq in self.model.equations]
         else:
             if isinstance(exog, Mapping):
-                items = [exog[eq.name] for eq in self.model._equations]
+                items = [exog[eq.name] for eq in self.model.equations]
             else:
                 items = list(exog)
-            if len(items) != len(self.model._equations):
+            if len(items) != len(self.model.equations):
                 raise ValueError("Expected design matrices for all equations")
             Xs = []
-            for item, eq in zip(items, self.model._equations, strict=False):
+            for item, eq in zip(items, self.model.equations, strict=False):
                 arr = _asarray_2d(item)
                 if arr.shape[1] != eq.X.shape[1]:
                     raise ValueError("Design matrix has incompatible number of columns")
@@ -512,6 +530,7 @@ class ALSGLSSystemResults:
         return XB_from_Blist(Xs, self.B_list)
 
     def summary_dict(self) -> dict[str, Any]:
+        """Return the headline fit statistics as a plain dict."""
         return {
             "rank": self.rank,
             "nobs": self.model.nobs,
@@ -528,7 +547,7 @@ class ALSGLSSystemResults:
         Computed as (X'Σ⁻¹X + λI)⁻¹ using the Woodbury identity.
         """
         if not hasattr(self, "_cov_params"):
-            Xs = [eq.X for eq in self.model._equations]
+            Xs = [eq.X for eq in self.model.equations]
             lam_B = self.model.lam_B
             XtSinvX = compute_XtSigmaInvX(Xs, self.F, self.D, lam_B=lam_B)
             self._cov_params = np.linalg.inv(XtSinvX)
@@ -544,8 +563,7 @@ class ALSGLSSystemResults:
         """t-statistics for H₀: β = 0."""
         se = self.bse
         with np.errstate(divide="ignore", invalid="ignore"):
-            t = np.where(se > 0, self.params / se, 0.0)
-        return t
+            return np.where(se > 0, self.params / se, 0.0)
 
     def _resid_df(self) -> int:
         """Residual degrees of freedom of the stacked system.
@@ -589,27 +607,30 @@ class ALSGLSSystemResults:
         """Get prediction results with standard errors and intervals.
 
         Args:
-            exog: Design matrices for new observations. If None, uses training data. Can be a dict {eq_name: X_j} or list [X_0, ..., X_{K-1}].
+            exog: Design matrices for new observations. If None, uses the
+                training data. Can be a dict {eq_name: X_j} or a list
+                [X_0, ..., X_{K-1}].
             alpha: Default significance level for intervals (default 0.05).
 
         Returns:
-            PredictionResults: Object with predicted_mean, se_mean, se_obs, and interval methods.
+            PredictionResults: Object with predicted_mean, se_mean, se_obs,
+            and interval methods.
 
         Raises:
             ValueError: If design matrices are not supplied for every equation, or
                 one has the wrong number of columns.
         """
         if exog is None:
-            Xs = [eq.X for eq in self.model._equations]
+            Xs = [eq.X for eq in self.model.equations]
         else:
             if isinstance(exog, Mapping):
-                items = [exog[eq.name] for eq in self.model._equations]
+                items = [exog[eq.name] for eq in self.model.equations]
             else:
                 items = list(exog)
-            if len(items) != len(self.model._equations):
+            if len(items) != len(self.model.equations):
                 raise ValueError("Expected design matrices for all equations")
             Xs = []
-            for item, eq in zip(items, self.model._equations, strict=False):
+            for item, eq in zip(items, self.model.equations, strict=False):
                 arr = _asarray_2d(item)
                 if arr.shape[1] != eq.X.shape[1]:
                     raise ValueError("Design matrix has incompatible number of columns")
@@ -675,7 +696,8 @@ class ALSGLSSystemResults:
         lines.append(sep)
         lines.append(f"Confidence intervals ({100 * (1 - alpha):.0f}%):")
         lines.append(
-            f"{'Parameter':<40} {'[' + str(alpha / 2):>10} {str(1 - alpha / 2) + ']':>10}"
+            f"{'Parameter':<40} {'[' + str(alpha / 2):>10} "
+            f"{str(1 - alpha / 2) + ']':>10}"
         )
         lines.append("-" * 78)
         for i, (eq_name, var_name) in enumerate(self.param_labels):

@@ -30,13 +30,14 @@ def select_rank_bic(
     BIC(k) = N * nll_per_row + (n_params / 2) * log(N)
 
     where n_params = K*(k+1) + k accounts for:
-    - F: K × k loadings
+    - F: K x k loadings
     - D: K diagonal variances
 
     Args:
         Xs: Design matrices for each equation.
         Y: Response matrix.
-        k_candidates: Candidate ranks to evaluate. Defaults to range(1, min(K//2, 12)+1).
+        k_candidates: Candidate ranks to evaluate. Defaults to
+            range(1, min(K//2, 12)+1).
         **als_kwargs: Additional arguments passed to als_gls().
 
     Returns:
@@ -90,7 +91,8 @@ def select_rank_cv(
     Args:
         Xs: Design matrices for each equation.
         Y: Response matrix.
-        k_candidates: Candidate ranks to evaluate. Defaults to range(1, min(K//2, 12)+1).
+        k_candidates: Candidate ranks to evaluate. Defaults to
+            range(1, min(K//2, 12)+1).
         n_folds: Number of cross-validation folds.
         random_state: Random state for reproducible fold splits.
         **als_kwargs: Additional arguments passed to als_gls().

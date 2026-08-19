@@ -73,4 +73,3 @@ __all__ = [
     "penalized_nll", "test_nll", "predict_Y", "mse",
 ]
 
-__version__ = "0.1.0"

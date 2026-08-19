@@ -1,3 +1,5 @@
+"""Synthetic data generators for GLS/SUR experiments and tests."""
+
 from __future__ import annotations
 
 import numpy as np
@@ -19,16 +21,16 @@ def simulate_sur(
         seed: Seed for the NumPy random number generator. Defaults to ``0``.
 
     Returns:
-        X_tr: Feature matrices for the training set. Each element has shape ``(N_tr, p)``.
-        Y_tr: Training responses of shape ``(N_tr, K)``.
-        X_te: Feature matrices for the test set. Each element has shape ``(N_te, p)``.
-        Y_te: Test responses of shape ``(N_te, K)``.
+        A tuple ``(X_tr, Y_tr, X_te, Y_te)``: lists of per-equation feature
+        matrices of shape ``(N_tr, p)`` and ``(N_te, p)``, and response
+        matrices of shape ``(N_tr, K)`` and ``(N_te, K)``.
 
     Notes:
         Randomness is controlled via ``numpy.random.default_rng(seed)``; pass a
         different ``seed`` for different simulations.
 
     Examples:
+        >>> from alsgls import simulate_sur
         >>> Xtr, Ytr, Xte, Yte = simulate_sur(100, 20, K=3, p=5, k=2, seed=42)
     """
     rng = np.random.default_rng(seed)
@@ -63,16 +65,17 @@ def simulate_gls(
         seed: Seed for the NumPy random number generator. Defaults to ``0``.
 
     Returns:
-        X_tr: Feature matrices for the training set. ``X_tr[j]`` has shape ``(N_tr, p_list[j])``.
-        Y_tr: Training responses of shape ``(N_tr, K)`` where ``K = len(p_list)``.
-        X_te: Feature matrices for the test set. ``X_te[j]`` has shape ``(N_te, p_list[j])``.
-        Y_te: Test responses of shape ``(N_te, K)``.
+        A tuple ``(X_tr, Y_tr, X_te, Y_te)``: per-equation feature matrices
+        with ``X_tr[j]`` of shape ``(N_tr, p_list[j])`` and ``X_te[j]`` of
+        shape ``(N_te, p_list[j])``, and responses of shape ``(N_tr, K)``
+        and ``(N_te, K)`` where ``K = len(p_list)``.
 
     Notes:
         Randomness is controlled via ``numpy.random.default_rng(seed)``; pass a
         different ``seed`` for different simulations.
 
     Examples:
+        >>> from alsgls import simulate_gls
         >>> p_list = [3, 5, 2]
         >>> Xtr, Ytr, Xte, Yte = simulate_gls(100, 20, p_list, k=2, seed=0)
     """

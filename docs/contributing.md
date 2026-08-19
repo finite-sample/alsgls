@@ -39,12 +39,8 @@ Add type hints to new functions:
 
 ```python
 def als_gls(
-    Xs: List[np.ndarray],
-    Y: np.ndarray,
-    k: int = 4,
-    **kwargs
-) -> Tuple[List[np.ndarray], np.ndarray, np.ndarray, float, Dict]:
-    ...
+    Xs: List[np.ndarray], Y: np.ndarray, k: int = 4, **kwargs
+) -> Tuple[List[np.ndarray], np.ndarray, np.ndarray, float, Dict]: ...
 ```
 
 ## Testing
@@ -200,12 +196,14 @@ When optimizing:
 1. Profile first:
    ```python
    import cProfile
-   cProfile.run('als_gls(Xs, Y, k=5)')
+
+   cProfile.run("als_gls(Xs, Y, k=5)")
    ```
 
 2. Benchmark changes:
    ```python
    import timeit
+
    before = timeit.timeit(old_code, number=100)
    after = timeit.timeit(new_code, number=100)
    ```

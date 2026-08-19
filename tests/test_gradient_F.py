@@ -78,7 +78,7 @@ class TestALSWithGradient:
     def test_als_converges(self):
         """ALS with gradient-based F-update should converge."""
         Xs_tr, Y_tr, _, _ = simulate_sur(N_tr=100, N_te=50, K=20, p=3, k=3, seed=42)
-        B, F, D, _, info = als_gls(Xs_tr, Y_tr, k=4, sweeps=10)
+        _B, _F, _D, _, info = als_gls(Xs_tr, Y_tr, k=4, sweeps=10)
 
         nll_trace = info["nll_trace"]
         assert len(nll_trace) > 1

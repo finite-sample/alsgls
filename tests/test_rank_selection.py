@@ -77,13 +77,13 @@ class TestSelectRankCV:
 
     def test_invalid_n_folds(self):
         Xs, Y, _, _ = _small_sur_data()
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="n_folds must be at least 2"):
             select_rank_cv(Xs, Y, k_candidates=[1, 2], n_folds=1)
 
 
 class TestALSGLSRankSelection:
     def test_bic_rank_selection(self):
-        Xs, Y, Xs_te, Y_te = _small_sur_data()
+        Xs, Y, _Xs_te, _Y_te = _small_sur_data()
         est = ALSGLS(rank="bic", rank_candidates=[1, 2, 3, 4], max_sweeps=8)
         est.fit(Xs, Y)
         assert est.rank_ in [1, 2, 3, 4]

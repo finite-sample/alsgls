@@ -18,15 +18,6 @@
    :show-inheritance:
 ```
 
-### alsgls.em module
-
-```{eval-rst}
-.. automodule:: alsgls.em
-   :members:
-   :undoc-members:
-   :show-inheritance:
-```
-
 ### alsgls.ops module
 
 ```{eval-rst}
@@ -49,6 +40,24 @@
 
 ```{eval-rst}
 .. automodule:: alsgls.sim
+   :members:
+   :undoc-members:
+   :show-inheritance:
+```
+
+### alsgls.lsqr_gls module
+
+```{eval-rst}
+.. automodule:: alsgls.lsqr_gls
+   :members:
+   :undoc-members:
+   :show-inheritance:
+```
+
+### alsgls.rank_selection module
+
+```{eval-rst}
+.. automodule:: alsgls.rank_selection
    :members:
    :undoc-members:
    :show-inheritance:

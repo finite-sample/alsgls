@@ -1,5 +1,5 @@
 [build-system]
-requires = ["uv_build"]
+requires = ["uv_build>=0.12.5,<0.13"]
 build-backend = "uv_build"
 
 [project]
@@ -9,124 +9,105 @@ description = "Type-safe lightweight low-rank+diagonal GLS/SUR solver via ALS"
 readme = "README.md"
 requires-python = ">=3.11"
 authors = [{ name = "Gaurav Sood", email = "contact@gsood.com" }]
-license = { text = "MIT" }
-urls = { "Homepage" = "https://github.com/finite-sample/alsgls" }
+license = "MIT"
+license-files = ["LICENSE"]
 classifiers = [
+  "Intended Audience :: Developers",
   "Programming Language :: Python :: 3",
-  "License :: OSI Approved :: MIT License",
-  "Operating System :: OS Independent",
 ]
 dependencies = [
   "numpy>=1.21",
   "scipy>=1.17.1",
 ]
 
-[project.optional-dependencies]
-dev = ["pytest>=9.1.1", "scipy>=1.17.1"]
-lsqr = ["scipy>=1.17.1"]
-pandas = ["pandas>=1.0"]
-docs = [
-  "sphinx>=7.0",
-  "furo",
-  "sphinx-autodoc-typehints",
-  "myst-parser>=2.0",
-]
+[project.urls]
+Homepage = "https://github.com/finite-sample/alsgls"
+Documentation = "https://finite-sample.github.io/alsgls/"
+Repository = "https://github.com/finite-sample/alsgls"
 
+[project.optional-dependencies]
+pandas = ["pandas>=1.0"]
 
 [tool.uv.build-backend]
-module-root = "."
+module-name = "alsgls"
 
 [dependency-groups]
 dev = [
-  # Monte Carlo test machinery. A dependency-group, not an extra: a direct
-  # URL in published metadata is rejected by PyPI.
+  "ruff>=0.14",
+  "pyright>=1.1.390",
+  "pydoclint>=0.5",
+  "pre-commit>=4",
+  { include-group = "test" },
+]
+# simcheck is Monte Carlo test machinery. A dependency-group, not an extra: a
+# direct URL in published metadata is rejected by PyPI.
+test = [
   "simcheck @ git+https://github.com/finite-sample/simcheck",
-  "pytest>=9.1.1", "pytest-cov>=7.1.0", "ruff>=0.16.2", "mypy>=1.0", "pre-commit>=4.6.2", "deptry>=0.25.1"]
-test = ["simcheck @ git+https://github.com/finite-sample/simcheck", "pytest>=9.1.1", "pytest-cov>=7.1.0"]
-
-[tool.deptry]
-# Ignore files/directories that aren't part of the main package
-exclude = [
-    "als_sim/",          # Jupyter notebooks with experimental code
-    "benchmarks/",       # Benchmarking scripts with optional deps
-    "tests/",           # Test files
-    "docs/",            # Documentation
-    ".venv/",           # Virtual environment
-    "venv/",            # Alternative virtual environment name
-    "build/",           # Build artifacts
-    "dist/",            # Distribution files
+  "pytest>=8",
+  "pytest-cov>=6",
 ]
-
-# These are used by tools, not directly imported in Python code
-extend_exclude = [
-    "docs/source/conf.py",       # Sphinx config uses docs dependencies
+docs = [
+  "sphinx>=8",
+  "py-canon @ git+https://github.com/gojiplus/py-canon@v1",
+  "furo",
+  "myst-parser",
+  "sphinx-copybutton",
 ]
-
-# Ignore specific dependency issues
-[tool.deptry.per_rule_ignores]
-# pytest is used by pytest runner, not imported directly
-# Docs dependencies used by Sphinx, not imported in Python
-DEP002 = ["pytest", "pytest-cov", "sphinx", "furo", "sphinx-autodoc-typehints", "myst-parser"]
-
-# pandas is optional - used only when available
-DEP003 = ["pandas"]
 
 [tool.ruff]
 line-length = 88
 target-version = "py311"
-exclude = [
-    ".git",
-    "__pycache__",
-    "build",
-    "dist",
-    ".venv",
-    "als_sim",  # exclude notebooks
-]
-
-[tool.ruff.lint.pydocstyle]
-# The fleet standard; see ../preen.
-convention = "google"
+# als_sim holds exploratory notebooks and their support code, not the package.
+exclude = ["als_sim"]
 
 [tool.ruff.lint]
-select = ["E", "W", "F", "I", "B", "C4", "UP", "D"]
-ignore = [
-    "E501",  # line too long (handled by formatter)
-    "E701",  # multiple statements on one line (colon)
-    "E702",  # multiple statements on one line (semicolon)
-    "E741",  # ambiguous variable names
-    "B008",  # do not perform function calls in argument defaults
-    "B023",  # function definition does not bind loop variable
-    # Missing-docstring codes, ignored to match ../incline, the fleet's reference
-    # for this set. Enabling `D` here is about the *content* of the docstrings
-    # that exist -- section style, argument coverage -- not about requiring one on
-    # every module, class and method.
-    "D100",  # missing docstring in public module
-    "D101",  # missing docstring in public class
-    "D102",  # missing docstring in public method
-    "D103",  # missing docstring in public function
-    "D104",  # missing docstring in public package
-    "D105",  # missing docstring in magic method
-    "D107",  # missing docstring in __init__
-    "D203",  # incompatible with D211
-    "D213",  # incompatible with D212
-    "B904",  # raise exceptions with from err or from None
+external = ["DOC"]
+select = [
+    "E", "W", "F", "I", "B", "C4", "UP", "N", "D", "S", "SIM", "T20", "PT", "RUF",
+    "PTH", "RET", "PIE", "FURB", "PERF", "DTZ", "LOG", "G", "TC", "FLY",
+    "RSE", "SLOT", "FA", "A", "EXE", "ICN", "PGH", "PLE", "ARG", "SLF",
 ]
+# D203/D213: the google convention the fleet standard picks. W191/D206/D300:
+# ruff's own docs list these as always incompatible with `ruff format`, which
+# the standard also runs.
+# N802/N803/N806: the public API and internals follow the linear-algebra
+# notation of the GLS/SUR literature (Xs, Y, B, F, D, XtX...); renaming to
+# lowercase would break the published API and detach the code from the math
+# it implements.
+ignore = ["D203", "D213", "W191", "D206", "D300", "N802", "N803", "N806"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
 
 [tool.ruff.lint.per-file-ignores]
-"__init__.py" = ["F401"]
-"tests/*" = ["S101"]
+# Unused fixture arguments and private-member access are how tests are written.
+"tests/**" = ["S101", "D", "ARG", "SLF"]
+"docs/**" = ["D"]
+# Runnable demo scripts report through print by design.
+"examples/**" = ["T201"]
+"benchmarks/**" = ["T201"]
 
-[tool.mypy]
-python_version = "3.11"
-warn_return_any = true
-warn_unused_configs = true
-check_untyped_defs = true
+[tool.pyright]
+include = ["src"]
+typeCheckingMode = "standard"
 
 [tool.pydoclint]
 style = "google"
 arg-type-hints-in-docstring = false
-arg-type-hints-in-signature = true
 check-return-types = false
 check-class-attributes = false
 allow-init-docstring = true
-exclude = '\.venv|tests|docs|als_sim|benchmarks'
+exclude = '\.venv|tests|docs'
+arg-type-hints-in-signature = true
+
+[tool.codespell]
+# ALS (alternating least squares) is the package's subject, not a typo.
+ignore-words-list = "als"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.coverage.run]
+source = ["src"]
+
+[tool.preen]

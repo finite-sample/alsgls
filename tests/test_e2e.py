@@ -24,9 +24,9 @@ def make_sur(N=400, K=60, p=3, k=4, seed=123):
 
 
 def test_end_to_end_nll_and_scale_guard():
-    Xs, Y, B_true, F_true, D_true = make_sur()
+    Xs, Y, _B_true, F_true, D_true = make_sur()
 
-    B_hat, F_hat, D_hat, mem_mb, info = als_gls(
+    B_hat, F_hat, D_hat, _mem_mb, info = als_gls(
         Xs,
         Y,
         k=4,

@@ -10,8 +10,7 @@ ATOL = 5e-9
 
 def rand_spd_diag(K, rng):
     # moderately conditioned diagonal
-    d = 0.25 + rng.random(K)
-    return d
+    return 0.25 + rng.random(K)
 
 
 def test_woodbury_matches_dense_right_multiply():
@@ -26,7 +25,7 @@ def test_woodbury_matches_dense_right_multiply():
 
     dense = M @ S_inv
     # Woodbury path using Cholesky factorization
-    Dinv, C_chol = woodbury_chol(F, D)
+    _Dinv, C_chol = woodbury_chol(F, D)
     wb = apply_siginv_to_matrix(M, F, D, C_chol=C_chol)
 
     assert np.allclose(dense, wb, rtol=RTOL, atol=ATOL)
@@ -78,7 +77,7 @@ def test_determinant_lemma_matches_dense():
     S = F @ F.T + np.diag(D)
     logdet_dense = float(np.linalg.slogdet(S)[1])
 
-    Dinv, C_chol = woodbury_chol(F, D)
+    _Dinv, C_chol = woodbury_chol(F, D)
     logdet_diag = np.sum(np.log(np.clip(D, 1e-30, None)))
     logdet_small = 2.0 * np.sum(np.log(np.diag(C_chol)))
     logdet_lemma = logdet_diag + logdet_small
