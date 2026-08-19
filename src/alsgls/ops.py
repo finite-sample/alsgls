@@ -1,20 +1,25 @@
+"""Woodbury-based linear algebra kernels for the ALS-GLS solver."""
+
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
+if TYPE_CHECKING:
+    from collections.abc import Callable, Sequence
+
 
 def woodbury_chol(F: np.ndarray, D: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    """Return (Dinv, C_chol) where C_chol is the Cholesky factor of C = I + F^T D^{-1} F.
+    """Return (Dinv, C_chol) with the Cholesky factor of C = I + F^T D^{-1} F.
 
-    Intended for numerically stable downstream solves that avoid forming C^{-1} explicitly.
+    Intended for numerically stable downstream solves that avoid forming
+    C^{-1} explicitly.
     """
     D = np.asarray(D)
     Dinv = 1.0 / np.clip(D, 1e-12, None)
-    FtDinv = F.T * Dinv  # k × K
-    M = FtDinv @ F  # k × k
+    FtDinv = F.T * Dinv  # k x K
+    M = FtDinv @ F  # k x k
     C = np.eye(F.shape[1]) + M
     C_chol = np.linalg.cholesky(C)  # upper or lower (NumPy returns lower-triangular)
     return Dinv, C_chol
@@ -33,8 +38,7 @@ def _right_solve_with_C(T: np.ndarray, C_chol: np.ndarray) -> np.ndarray:
     # Solve C X = T using two triangular solves with the Cholesky factor
     # NumPy's solve works fine for triangular systems as well.
     Y = np.linalg.solve(C_chol, T)  # C_chol Y = T
-    X = np.linalg.solve(C_chol.T, Y)  # C_chol^T X = Y
-    return X
+    return np.linalg.solve(C_chol.T, Y)  # C_chol^T X = Y
 
 
 def apply_siginv_to_matrix(
@@ -45,15 +49,15 @@ def apply_siginv_to_matrix(
     Dinv: np.ndarray | None = None,
     C_chol: np.ndarray,
 ) -> np.ndarray:
-    """Right-multiply an (N×K) matrix M by Σ^{-1} using Woodbury.
+    """Right-multiply an (NxK) matrix M by Σ^{-1} using Woodbury.
 
     Σ = F F^T + diag(D), which is never formed densely.
 
     Uses numerically stable Cholesky factorization approach.
 
     Args:
-        M: (N×K) matrix to right-multiply by Σ^{-1}
-        F: (K×k) factor loadings matrix
+        M: (NxK) matrix to right-multiply by Σ^{-1}
+        F: (Kxk) factor loadings matrix
         D: (K,) diagonal noise variances
         Dinv: Pre-computed 1/D. If None, computed from D.
         C_chol: Cholesky factor of C = I + F^T D^{-1} F
@@ -65,22 +69,22 @@ def apply_siginv_to_matrix(
         Dinv = 1.0 / np.clip(np.asarray(D), 1e-12, None)
 
     MDinv = M * Dinv[None, :]
-    T1 = MDinv @ F  # (N × k)
+    T1 = MDinv @ F  # (N x k)
     # Compute T2 = T1 @ C^{-1} without forming C^{-1}
     # Solve C Z^T = T1^T  ->  Z^T = C^{-1} T1^T  ->  T2 = Z^T
-    ZT = _right_solve_with_C(T1.T, C_chol)  # (k × N)
+    ZT = _right_solve_with_C(T1.T, C_chol)  # (k x N)
     T2 = ZT.T
-    T3 = T2 @ (F.T * Dinv)  # (N × K)
+    T3 = T2 @ (F.T * Dinv)  # (N x K)
     return np.asarray(MDinv - T3)
 
 
 def stack_B_list(B_list: list[np.ndarray]) -> np.ndarray:
-    """Stack list of (p_j×1) blocks into a flat vector."""
+    """Stack list of (p_jx1) blocks into a flat vector."""
     return np.concatenate([b.ravel() for b in B_list], axis=0)
 
 
 def unstack_B_vec(bvec: np.ndarray, p_list: list[int]) -> list[np.ndarray]:
-    """Inverse of stack: vector -> list of (p_j×1)."""
+    """Inverse of stack: vector -> list of (p_jx1)."""
     out, i = [], 0
     for p in p_list:
         out.append(bvec[i : i + p].reshape(p, 1))
@@ -89,7 +93,7 @@ def unstack_B_vec(bvec: np.ndarray, p_list: list[int]) -> list[np.ndarray]:
 
 
 def XB_from_Blist(Xs: list[np.ndarray], B_list: list[np.ndarray]) -> np.ndarray:
-    """Return N × K matrix of predictions."""
+    """Return N x K matrix of predictions."""
     return np.column_stack([Xs[j] @ B_list[j] for j in range(len(Xs))])
 
 
@@ -135,7 +139,8 @@ def cg_solve(
             raise ValueError(
                 "Operator is not positive definite: p^T A p ≤ 0. "
                 "This may indicate numerical issues or incorrectly specified problem. "
-                "Try increasing regularization (lam_F, lam_B) or check input data for singularities."
+                "Try increasing regularization (lam_F, lam_B) or check "
+                "input data for singularities."
             )
 
         alpha = rz_old / pAp
@@ -152,7 +157,8 @@ def cg_solve(
             raise ValueError(
                 "Preconditioner is not positive definite: r^T z ≤ 0. "
                 "This indicates a problem with the preconditioner. "
-                "Try disabling preconditioning (M_pre=None) or using simpler preconditioning."
+                "Try disabling preconditioning (M_pre=None) or using "
+                "simpler preconditioning."
             )
         beta = rz_new / rz_old
         p = z + beta * p
@@ -177,7 +183,7 @@ def siginv_diag(F: np.ndarray, Dinv: np.ndarray, C_chol: np.ndarray) -> np.ndarr
         diag_Sinv: The diagonal entries of Σ^{-1}.
     """
     # Compute C^{-1} F^T via two triangular solves
-    Cinv_Ft = _right_solve_with_C(F.T, C_chol)  # (k × K)
+    Cinv_Ft = _right_solve_with_C(F.T, C_chol)  # (k x K)
     # Row-wise quadratic forms f_j^T C^{-1} f_j  =  sum over k of (F * (C^{-1} F^T)^T)
     row_q = np.sum(F * Cinv_Ft.T, axis=1)  # (K,)
     diag_Sinv = Dinv - (Dinv**2) * row_q
@@ -198,16 +204,16 @@ def apply_siginv_F(F: np.ndarray, Dinv: np.ndarray, C_chol: np.ndarray) -> np.nd
         SinvF: Σ^{-1} @ F
     """
     # D^{-1} F
-    DinvF = Dinv[:, None] * F  # K × k
+    DinvF = Dinv[:, None] * F  # K x k
 
     # F^T D^{-1} F
-    FtDinvF = F.T @ DinvF  # k × k
+    FtDinvF = F.T @ DinvF  # k x k
 
     # C^{-1} (F^T D^{-1} F)
-    Cinv_FtDinvF = _right_solve_with_C(FtDinvF, C_chol)  # k × k
+    Cinv_FtDinvF = _right_solve_with_C(FtDinvF, C_chol)  # k x k
 
     # D^{-1} F C^{-1} F^T D^{-1} F
-    correction = DinvF @ Cinv_FtDinvF  # K × k
+    correction = DinvF @ Cinv_FtDinvF  # K x k
 
     return np.asarray(DinvF - correction)
 
@@ -315,18 +321,18 @@ def grad_F_nll(
     N, _ = R.shape
 
     # Sample covariance S = R^T R (not divided by N yet, will divide later)
-    S = R.T @ R  # K × K
+    S = R.T @ R  # K x K
 
     # Σ^{-1} F
-    SigmaInvF = apply_siginv_F(F, Dinv, C_chol)  # K × k
+    SigmaInvF = apply_siginv_F(F, Dinv, C_chol)  # K x k
 
     # Need Σ^{-1} @ S, but apply_siginv_to_matrix computes M @ Σ^{-1}
     # Since both Σ^{-1} and S are symmetric: Σ^{-1} @ S = (S @ Σ^{-1})^T
     S_SigmaInv = apply_siginv_to_matrix(S, F, D, Dinv=Dinv, C_chol=C_chol)  # S @ Σ^{-1}
-    SigmaInv_S = S_SigmaInv.T  # Σ^{-1} @ S (K × K)
+    SigmaInv_S = S_SigmaInv.T  # Σ^{-1} @ S (K x K)
 
     # Σ^{-1} S Σ^{-1} F
-    SigmaInv_S_SigmaInvF = SigmaInv_S @ SigmaInvF  # K × k
+    SigmaInv_S_SigmaInvF = SigmaInv_S @ SigmaInvF  # K x k
 
     # Gradient: Σ^{-1} F - (1/N) Σ^{-1} S Σ^{-1} F + λ_F * F
     # where S = R^T R (not divided by N)
@@ -353,7 +359,9 @@ def compute_prediction_variance(
         F: (K, k) factor loadings matrix
         D: (K,) diagonal noise variances
         cov_params: (p_total, p_total) covariance matrix of parameter estimates
-        include_residual: If True, add Σ_jj (residual variance) for prediction intervals. If False, return only variance of mean prediction (confidence intervals).
+        include_residual: If True, add Σ_jj (residual variance) for
+            prediction intervals. If False, return only the variance of the
+            mean prediction (confidence intervals).
 
     Returns:
         var_pred: (N_new, K) array of prediction variances
@@ -367,7 +375,7 @@ def compute_prediction_variance(
 
     N_new = Xs[0].shape[0]
     p_list = [X.shape[1] for X in Xs]
-    offsets = np.cumsum([0] + p_list)
+    offsets = np.cumsum([0, *p_list])
 
     var_pred = np.zeros((N_new, K))
 

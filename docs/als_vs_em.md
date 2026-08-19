@@ -39,7 +39,7 @@ matrix identity to avoid forming dense matrices:
 The key insight: we only need to invert a k×k matrix (I + F^T D^(-1)F), not K×K.
 
 ```python
-# ALS's efficient step (pseudocode)  
+# ALS's efficient step (pseudocode)
 D_inv = 1.0 / D  # K×1 vector
 small_inv = np.linalg.inv(np.eye(k) + F.T @ (D_inv[:, None] * F))  # k×k
 # Apply Woodbury formula without forming K×K matrices
@@ -65,27 +65,23 @@ import time
 
 # Generate test problem
 K = 100  # equations
-N = 300  # observations  
-k = 5    # factors
+N = 300  # observations
+k = 5  # factors
 Xs_tr, Y_tr, _, _ = simulate_sur(N_tr=N, N_te=50, K=K, p=3, k=k)
 
 # Time ALS
 t0 = time.time()
-B_als, F_als, D_als, mem_als, info_als = als_gls(
-    Xs_tr, Y_tr, k=k, sweeps=8
-)
+B_als, F_als, D_als, mem_als, info_als = als_gls(Xs_tr, Y_tr, k=k, sweeps=8)
 time_als = time.time() - t0
 
 # Time EM
 t0 = time.time()
-B_em, F_em, D_em, mem_em, info_em = em_gls(
-    Xs_tr, Y_tr, k=k, iters=30
-)
+B_em, F_em, D_em, mem_em, info_em = em_gls(Xs_tr, Y_tr, k=k, iters=30)
 time_em = time.time() - t0
 
 print(f"ALS: {time_als:.2f}s, {mem_als:.1f}MB")
 print(f"EM:  {time_em:.2f}s, {mem_em:.1f}MB")
-print(f"Memory ratio: {mem_em/mem_als:.1f}×")
+print(f"Memory ratio: {mem_em / mem_als:.1f}×")
 ```
 
 ## Statistical Equivalence

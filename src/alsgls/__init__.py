@@ -1,3 +1,5 @@
+"""Lightweight low-rank-plus-diagonal GLS/SUR estimation via ALS."""
+
 from .als import als_gls
 from .api import ALSGLS, ALSGLSSystem, ALSGLSSystemResults, PredictionResults
 from .metrics import mse, nll_per_row

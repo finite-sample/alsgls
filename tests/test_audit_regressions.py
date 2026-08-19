@@ -61,7 +61,8 @@ class TestRegularizationIsNotOverridden:
         resid = A @ beta - rhs
         assert np.abs(resid).max() / np.abs(rhs).max() < 1e-5, (
             "returned beta does not solve the unregularised GLS normal "
-            f"equations; relative residual {np.abs(resid).max() / np.abs(rhs).max():.3e}"
+            "equations; relative residual "
+            f"{np.abs(resid).max() / np.abs(rhs).max():.3e}"
         )
 
 

@@ -8,14 +8,17 @@ import json
 import math
 import tempfile
 import time
-from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 
 from alsgls import ALSGLS, nll_per_row
 from alsgls.ops import XB_from_Blist
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
 
 
 def _simulate_sur(N_tr: int, N_te: int, K: int, p: int, k: int, seed: int):
@@ -64,10 +67,10 @@ def _maybe_memray_runner(func, *args, **kwargs):
     if backend == "memray":
         try:
             import memray
-        except ImportError:
+        except ImportError as err:
             raise RuntimeError(
                 "memray is not installed; install memray or use --memory-backend none"
-            )
+            ) from err
 
         with tempfile.TemporaryDirectory() as tmpdir:
             path = Path(tmpdir) / "run.bin"
@@ -104,10 +107,8 @@ def _run_statsmodels(system, **fit_kwargs):
     model = SMSUR(system)
     results = model.fit(**fit_kwargs)
     sigma = np.asarray(results.sigma)
-    params = []
-    for name in system.keys():
-        params.append(np.asarray(results.params.loc[name]).reshape(-1, 1))
-    fitted = np.column_stack([results.predict(eq=name) for name in system.keys()])
+    params = [np.asarray(results.params.loc[name]).reshape(-1, 1) for name in system]
+    fitted = np.column_stack([results.predict(eq=name) for name in system])
     return {
         "B": params,
         "sigma": sigma,
@@ -125,14 +126,16 @@ def _run_linearmodels(system, **fit_kwargs):
     model = LMSUR(system)
     results = model.fit(**fit_kwargs)
     sigma = np.asarray(results.sigma)
-    params = [np.asarray(results.params[name]).reshape(-1, 1) for name in system.keys()]
-    fitted = np.column_stack([results.predict(eq=name) for name in system.keys()])
-    resid = np.column_stack([results.resids[name] for name in system.keys()])
+    params = [np.asarray(results.params[name]).reshape(-1, 1) for name in system]
+    fitted = np.column_stack([results.predict(eq=name) for name in system])
+    resid = np.column_stack([results.resids[name] for name in system])
     return {"B": params, "sigma": sigma, "fitted": fitted, "resid": resid}, "ok"
 
 
 @dataclass
 class BenchmarkResult:
+    """One method's fit quality, memory, and timing on one grid point."""
+
     K: int
     N: int
     p: int
@@ -151,6 +154,7 @@ def run_benchmark(
     seed: int = 0,
     memory_backend: str = "resource",
 ) -> list[BenchmarkResult]:
+    """Run every solver over the (K, N, p, k) grid and collect results."""
     results: list[BenchmarkResult] = []
 
     for K, N, p, k in grid:
@@ -165,7 +169,7 @@ def run_benchmark(
 
         system = {f"eq{j}": (Y_tr[:, j], X_tr[j]) for j in range(K)}
 
-        def _als_run():
+        def _als_run(k=k, X_tr=X_tr, Y_tr=Y_tr, X_te=X_te):
             model = ALSGLS(rank=k, max_sweeps=12)
             model.fit(X_tr, Y_tr)
             preds = model.predict(X_te)
@@ -244,10 +248,12 @@ def run_benchmark(
 
 
 def parse_grid(K_vals, N_vals, p_vals, k_vals):
+    """Expand per-dimension value lists into a full benchmark grid."""
     return list(itertools.product(K_vals, N_vals, p_vals, k_vals))
 
 
 def main(argv: Iterable[str] | None = None) -> None:
+    """Parse CLI arguments, run the benchmark grid, and print a report."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--K", nargs="*", type=int, default=[20, 40])
     parser.add_argument("--N", nargs="*", type=int, default=[200])
@@ -268,7 +274,8 @@ def main(argv: Iterable[str] | None = None) -> None:
     for row in results:
         print(
             f"K={row.K:3d} N={row.N:4d} p={row.p:2d} k={row.k:2d} | {row.method:12s} "
-            f"beta_RMSE={row.beta_rmse!r} test_NLL={row.test_nll!r} peak_mem={row.peak_memory!r} "
+            f"beta_RMSE={row.beta_rmse!r} test_NLL={row.test_nll!r} "
+            f"peak_mem={row.peak_memory!r} "
             f"time={row.wall_time:.2f}s status={row.status}"
         )
 

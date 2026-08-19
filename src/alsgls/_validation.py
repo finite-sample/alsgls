@@ -27,7 +27,8 @@ def _validate_design_matrices(Xs: Any, *, name: str = "Xs") -> list[np.ndarray]:
     if not isinstance(Xs, (list, tuple)) or len(Xs) == 0:
         raise ValueError(
             f"{name} must be a non-empty list or tuple of arrays. "
-            f"Got {type(Xs).__name__} with length {len(Xs) if hasattr(Xs, '__len__') else '?'}"
+            f"Got {type(Xs).__name__} with length "
+            f"{len(Xs) if hasattr(Xs, '__len__') else '?'}"
         )
 
     validated_Xs = []
@@ -98,7 +99,8 @@ def _check_array_compatibility(
     if len(Xs) != K:
         raise ValueError(
             f"Number of design matrices ({len(Xs)}) must match {Y_name} columns ({K}). "
-            f"Either provide {K} design matrices or reshape {Y_name} to have {len(Xs)} columns."
+            f"Either provide {K} design matrices or reshape {Y_name} "
+            f"to have {len(Xs)} columns."
         )
 
     for j, X in enumerate(Xs):
@@ -157,19 +159,17 @@ def _sanitize_regularization_params(
     Raises:
         ValueError: If regularization parameters are negative.
     """
-    if lam_F is not None:
-        if not isinstance(lam_F, (int, float)) or lam_F < 0:
-            raise ValueError(
-                f"lam_F must be non-negative, got {lam_F}. "
-                f"Try lam_F=1e-3 for light regularization."
-            )
+    if lam_F is not None and (not isinstance(lam_F, (int, float)) or lam_F < 0):
+        raise ValueError(
+            f"lam_F must be non-negative, got {lam_F}. "
+            f"Try lam_F=1e-3 for light regularization."
+        )
 
-    if lam_B is not None:
-        if not isinstance(lam_B, (int, float)) or lam_B < 0:
-            raise ValueError(
-                f"lam_B must be non-negative, got {lam_B}. "
-                f"Try lam_B=1e-3 for light regularization."
-            )
+    if lam_B is not None and (not isinstance(lam_B, (int, float)) or lam_B < 0):
+        raise ValueError(
+            f"lam_B must be non-negative, got {lam_B}. "
+            f"Try lam_B=1e-3 for light regularization."
+        )
 
     # ``x or default`` would discard an explicit 0.0, which the checks above
     # accept as a valid ("non-negative") request for no regularization.

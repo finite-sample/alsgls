@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Real data example: Fama-French 49 industry portfolios.
 
 Demonstrates ALS-GLS on correlated industry returns where:
@@ -26,7 +25,7 @@ def load_ff_49_industries():
     with urlopen(url) as response:
         zip_data = io.BytesIO(response.read())
     with zipfile.ZipFile(zip_data) as zf:
-        csv_name = [n for n in zf.namelist() if n.lower().endswith(".csv")][0]
+        csv_name = next(n for n in zf.namelist() if n.lower().endswith(".csv"))
         with zf.open(csv_name) as f:
             lines = f.read().decode("utf-8").split("\n")
 
@@ -55,13 +54,12 @@ def load_ff_49_industries():
         vals = [
             float(x) if x.strip() and x.strip() != "" else np.nan for x in parts[1:]
         ]
-        records.append([date_str] + vals)
+        records.append([date_str, *vals])
 
     df = pd.DataFrame(records, columns=["date"] + [h.strip() for h in header[1:]])
     df["date"] = pd.to_datetime(df["date"], format="%Y%m")
     df = df.set_index("date")
-    df = df.dropna()
-    return df
+    return df.dropna()
 
 
 def load_ff_factors():
@@ -70,7 +68,7 @@ def load_ff_factors():
     with urlopen(url) as response:
         zip_data = io.BytesIO(response.read())
     with zipfile.ZipFile(zip_data) as zf:
-        csv_name = [n for n in zf.namelist() if n.lower().endswith(".csv")][0]
+        csv_name = next(n for n in zf.namelist() if n.lower().endswith(".csv"))
         with zf.open(csv_name) as f:
             lines = f.read().decode("utf-8").split("\n")
 
@@ -96,15 +94,15 @@ def load_ff_factors():
         if len(date_str) != 6:
             continue
         vals = [float(x.strip()) for x in parts[1:5]]
-        records.append([date_str] + vals)
+        records.append([date_str, *vals])
 
     df = pd.DataFrame(records, columns=["date", "Mkt-RF", "SMB", "HML", "RF"])
     df["date"] = pd.to_datetime(df["date"], format="%Y%m")
-    df = df.set_index("date")
-    return df
+    return df.set_index("date")
 
 
 def main():
+    """Fit ALS-GLS to the Fama-French industry panel and report fit quality."""
     print("Loading Fama-French 49 Industry Portfolios...")
     ind = load_ff_49_industries()
     print(f"  Loaded {len(ind)} months, {ind.shape[1]} industries")

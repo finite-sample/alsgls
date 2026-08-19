@@ -1,3 +1,5 @@
+"""Alternating-least-squares solver for low-rank-plus-diagonal GLS."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -40,7 +42,7 @@ def als_gls(
 ) -> tuple[list[np.ndarray], np.ndarray, np.ndarray, float, dict[str, Any]]:
     """Alternating-least-squares GLS with low-rank-plus-diagonal covariance.
 
-    Uses Woodbury throughout; never materializes K×K dense Σ.
+    Uses Woodbury throughout; never materializes KxK dense Σ.
 
     Enhancements (correctness-first):
       - Cached Woodbury pieces per sweep.
@@ -49,7 +51,8 @@ def als_gls(
       - Guarded MLE scale-correction of Σ each sweep.
       - β-step REVERT if it worsens NLL (keeps trace non-increasing).
       - Backtracking/damped acceptance on (F, D) to accept only NLL-improving updates.
-      - Dual traces in `info`: nll_beta_trace (post-β), nll_trace/nll_sigma_trace (post-Σ).
+      - Dual traces in `info`: nll_beta_trace (post-β) and
+        nll_trace/nll_sigma_trace (post-Σ).
 
     Args:
         Xs: One design matrix per equation, each ``(N, p_j)``. The equations may
@@ -75,7 +78,12 @@ def als_gls(
             sweeps stop early.
 
     Returns:
-        B_list, F, D, mem_MB_est, info: info includes: - p_list - cg (last sweep) - nll_trace          (post-Σ, non-increasing) - nll_sigma_trace    (alias of nll_trace) - nll_beta_trace     (post-β baseline per sweep) - accept_t           (list of accepted backtracking t) - scale_used         (list of accepted scale factors, 1.0 if not applied)
+        B_list, F, D, mem_MB_est, info: ``info`` includes ``p_list``, ``cg``
+        (last sweep), ``nll_trace`` (post-Σ, non-increasing),
+        ``nll_sigma_trace`` (alias of ``nll_trace``), ``nll_beta_trace``
+        (post-β baseline per sweep), ``accept_t`` (accepted backtracking
+        step sizes), and ``scale_used`` (accepted scale factors, 1.0 when
+        not applied).
 
     Raises:
         np.linalg.LinAlgError: If a Cholesky factorisation of the Woodbury
@@ -178,14 +186,16 @@ def als_gls(
         block_diags = [diag_sinv[j] * np.sum(X * X, axis=0) for j, X in enumerate(Xs)]
         Mpre_diag = np.concatenate(block_diags, axis=0) + lam_B
 
-        def M_pre(v):
+        # Per-sweep quantities are bound as defaults so each closure captures
+        # this sweep's values rather than the loop variables (B023).
+        def M_pre(v, Mpre_diag=Mpre_diag):
             return v / np.maximum(Mpre_diag, 1e-8)
 
         # Matrix-free normal operator H(B) = X^T Σ^{-1} X · b + lam_B b
-        def A_mv(bvec):
+        def A_mv(bvec, F=F, D=D, Dinv=Dinv, C_chol=C_chol):
             B_dir = unstack_B_vec(bvec, p_list)
-            M = XB_from_Blist(Xs, B_dir)  # N × K
-            S = apply_siginv_to_matrix(M, F, D, Dinv=Dinv, C_chol=C_chol)  # N × K
+            M = XB_from_Blist(Xs, B_dir)  # N x K
+            S = apply_siginv_to_matrix(M, F, D, Dinv=Dinv, C_chol=C_chol)  # N x K
             out_blocks = [Xs[j].T @ S[:, [j]] for j in range(K)]
             out = np.concatenate(out_blocks, axis=0).ravel()
             return out + lam_B * bvec
@@ -235,20 +245,17 @@ def als_gls(
         # same way F does, so the whole iteration is scale-equivariant.
         gnorm = float(np.linalg.norm(dF))
         fnorm = float(np.linalg.norm(F))
-        if gnorm > 0.0:
-            t0 = (fnorm / gnorm) if fnorm > 0.0 else (1.0 / gnorm)
-        else:
-            t0 = 0.0
+        t0 = (fnorm / gnorm if fnorm > 0.0 else 1.0 / gnorm) if gnorm > 0.0 else 0.0
 
         # D update: closed-form MLE given the trial F,
         # d_j = max(S_jj - (F F^T)_jj, d_floor)  with  S = R^T R / N.
         diag_S = np.sum(R**2, axis=0) / N
 
-        def D_mle(F_try):
+        def D_mle(F_try, diag_S=diag_S):
             return np.maximum(diag_S - np.sum(F_try**2, axis=1), d_floor_eff)
 
         # Guarded scale correction helper (applied to a candidate F,D)
-        def try_with_scale(F_try, D_try):
+        def try_with_scale(F_try, D_try, R=R):
             """Return (F_out, D_out, nll_out, scale_used)."""
             nll0 = float(nll_per_row(R, F_try, D_try))
             if not scale_correct:
@@ -269,8 +276,7 @@ def als_gls(
 
             if nll_sc <= nll0 + 1e-12:
                 return F_sc, D_sc, nll_sc, c_star
-            else:
-                return F_try, D_try, nll0, 1.0
+            return F_try, D_try, nll0, 1.0
 
         # --- Backtracking line search on (F, D)
         F_old, D_old = F, D
@@ -315,7 +321,7 @@ def als_gls(
         if rel_impr < rel_tol:
             break
 
-    # Memory estimate: F (K×k) + D (K) + U (N×k) doubles
+    # Memory estimate: F (Kxk) + D (K) + U (Nxk) doubles
     mem_mb_est = (K * F.shape[1] + K + N * F.shape[1]) * 8 / 1e6
 
     info = {

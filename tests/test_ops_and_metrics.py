@@ -7,8 +7,7 @@ from alsgls.ops import apply_siginv_to_matrix, siginv_diag, woodbury_chol
 
 def rand_spd_diag(K, rng):
     # moderately conditioned diagonal
-    d = 0.3 + rng.random(K)
-    return d
+    return 0.3 + rng.random(K)
 
 
 def test_woodbury_matches_dense_small():
@@ -25,7 +24,7 @@ def test_woodbury_matches_dense_small():
     MD = M @ S_inv
 
     # Woodbury
-    Dinv, C_chol = woodbury_chol(F, D)
+    _Dinv, C_chol = woodbury_chol(F, D)
     MD_w = apply_siginv_to_matrix(M, F, D, C_chol=C_chol)
 
     assert np.allclose(MD, MD_w, rtol=5e-7, atol=5e-8)
@@ -55,5 +54,6 @@ def test_nll_is_finite_and_sane():
     R = rng.standard_normal((N, K))
     val = nll_per_row(R, F, D)
     assert np.isfinite(val)
-    # crude bound: should be at least the logdet term / 2N-ish; just check non-negativity
+    # crude bound: should be at least the logdet term / 2N-ish; just
+    # check non-negativity
     assert val > 0.0

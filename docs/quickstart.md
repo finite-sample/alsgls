@@ -26,11 +26,11 @@ from alsgls import simulate_sur
 
 # Generate Seemingly Unrelated Regressions data
 Xs_train, Y_train, Xs_test, Y_test = simulate_sur(
-    N_tr=240,    # Training observations
-    N_te=120,    # Test observations
-    K=60,        # Number of equations
-    p=3,         # Regressors per equation
-    k=4          # Latent factor rank
+    N_tr=240,  # Training observations
+    N_te=120,  # Test observations
+    K=60,  # Number of equations
+    p=3,  # Regressors per equation
+    k=4,  # Latent factor rank
 )
 ```
 

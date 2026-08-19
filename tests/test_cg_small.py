@@ -57,8 +57,8 @@ def test_cg_matches_dense_beta_solve():
     # ---- CG operator path (matrix-free)
     def A_mv(bvec):
         B_dir = unstack_B_vec(bvec, p_list)
-        M = XB_from_Blist(Xs, B_dir)  # N × K
-        S_M = M @ S_inv  # N × K
+        M = XB_from_Blist(Xs, B_dir)  # N x K
+        S_M = M @ S_inv  # N x K
         out_blocks = [Xs[j].T @ S_M[:, [j]] for j in range(K)]
         out = np.concatenate(out_blocks, axis=0).ravel()
         return out + lam_B * bvec

@@ -1,3 +1,5 @@
+"""Fit metrics for low-rank-plus-diagonal GLS models."""
+
 from __future__ import annotations
 
 import numpy as np
@@ -21,7 +23,8 @@ def nll_per_row(R: np.ndarray, F: np.ndarray, D: np.ndarray) -> float:
         D: Diagonal variances, length ``K``.
 
     Returns:
-        float: 0.5 * [ tr(R Σ^{-1} R^T)/N + log det(Σ) + K log(2π) ] where N is the number of rows in R.
+        float: 0.5 * [ tr(R Σ^{-1} R^T)/N + log det(Σ) + K log(2π) ]
+        where N is the number of rows in R.
     """
     N, K = R.shape
     # Woodbury factors

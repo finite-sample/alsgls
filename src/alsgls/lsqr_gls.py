@@ -12,7 +12,7 @@ be used directly.  In ill-conditioned designs this provides noticeably better
 convergence and is less sensitive to round-off.
 
 The implementation follows the write-up in the project documentation and is
-careful to avoid forming dense K×K matrices except for a skinny SVD of the
+careful to avoid forming dense KxK matrices except for a skinny SVD of the
 Woodbury core.
 """
 
@@ -39,9 +39,12 @@ class WoodburyWeight:
 
     Args:
         d: Diagonal of ``D`` in ``Σ = D + F F^T``.
-        F: Optional factor loadings.  If ``None`` or empty then ``Σ`` is purely diagonal and the action reduces to simple scaling by ``D^{-1/2}``.
+        F: Optional factor loadings. If ``None`` or empty then ``Σ`` is
+            purely diagonal and the action reduces to simple scaling by
+            ``D^{-1/2}``.
         d_floor: Lower bound applied element-wise to ``d`` to avoid singularities.
-        sv_tol: Relative tolerance used to trim tiny singular values when computing the skinny SVD of ``U = D^{-1/2} F``.
+        sv_tol: Relative tolerance used to trim tiny singular values when
+            computing the skinny SVD of ``U = D^{-1/2} F``.
     """
 
     d: ArrayLike
@@ -50,6 +53,7 @@ class WoodburyWeight:
     sv_tol: float = 1e-12
 
     def __post_init__(self) -> None:
+        """Floor the diagonal and precompute the Woodbury pieces."""
         d = np.asarray(self.d, dtype=float).copy()
         d[d < self.d_floor] = self.d_floor
         self.d = d
@@ -125,6 +129,7 @@ class GLSLinearOperator(LinearOperator):
         K: int,
         P: int,
     ) -> None:
+        """Wrap the stacked design action and whitening weight as an operator."""
         self._X_dot = X_dot
         self._X_Tdot = X_Tdot
         self._W = W
@@ -133,13 +138,13 @@ class GLSLinearOperator(LinearOperator):
         self._P = int(P)
         super().__init__(dtype=float, shape=(self._N * self._K, self._P))
 
-    def _matvec(self, v: np.ndarray) -> np.ndarray:
-        Y = self._X_dot(v)
+    def _matvec(self, x: np.ndarray) -> np.ndarray:
+        Y = self._X_dot(x)
         WY = self._W.W_apply(Y)
         return WY.reshape(self._N * self._K)
 
-    def _rmatvec(self, u: np.ndarray) -> np.ndarray:
-        U = np.asarray(u, dtype=float).reshape(self._N, self._K)
+    def _rmatvec(self, x: np.ndarray) -> np.ndarray:
+        U = np.asarray(x, dtype=float).reshape(self._N, self._K)
         WT_U = self._W.WT_apply(U)
         return self._X_Tdot(WT_U)
 
@@ -199,7 +204,9 @@ def solve_gls_weighted(
     b = W.W_apply(y).reshape(N * K)
 
     if method == "lsmr":
-        sol = lsmr(
+        # pyright resolves `lsmr` to scipy's shadowing submodule instead of
+        # the re-exported function; at runtime it is the function.
+        sol = lsmr(  # pyright: ignore[reportCallIssue]
             A, b, atol=atol, btol=btol, conlim=conlim, maxiter=maxiter, show=verbose
         )
         beta = sol[0]
@@ -214,7 +221,8 @@ def solve_gls_weighted(
             "normx": sol[7],
         }
     elif method == "lsqr":
-        sol = lsqr(
+        # Same submodule-vs-function shadowing as lsmr above.
+        sol = lsqr(  # pyright: ignore[reportCallIssue]
             A, b, atol=atol, btol=btol, conlim=conlim, iter_lim=maxiter, show=verbose
         )
         beta = sol[0]
@@ -273,8 +281,8 @@ def make_block_design_ops(X_blocks: Sequence[np.ndarray]):
 
 
 __all__ = [
-    "WoodburyWeight",
     "GLSLinearOperator",
-    "solve_gls_weighted",
+    "WoodburyWeight",
     "make_block_design_ops",
+    "solve_gls_weighted",
 ]
