@@ -593,7 +593,7 @@ MC_TRACKED = (0, 3, 6, 9)
 MC_NULLS = (2, 5, 8, 11)
 
 
-def _mc_truth(n, seed=0):
+def _mc_truth(n, truth_seed=0):
     """Parameters every replicate shares, drawn once and then held fixed.
 
     Redrawing the truth per replicate would make the study measure something
@@ -601,13 +601,15 @@ def _mc_truth(n, seed=0):
 
     Args:
         n: Rows per equation.
-        seed: Seed for the single draw.
+        truth_seed: Seed for the single draw. Named apart from the replicate
+            seed on purpose -- they are different quantities, and sharing the
+            name invites threading one into the other.
 
     Returns:
         tuple: ``(Xs, B, F, D, params)``, where ``params`` is the flattened
         coefficient vector in the order ``ALSGLSSystemResults.params`` uses.
     """
-    rng = np.random.default_rng(seed)
+    rng = np.random.default_rng(truth_seed)
     Xs = [rng.standard_normal((n, MC_P)) for _ in range(MC_K)]
     B = [rng.standard_normal((MC_P, 1)) for _ in range(MC_K)]
     for coefficients in B:
