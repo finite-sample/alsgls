@@ -15,6 +15,30 @@ from .ops import XB_from_Blist, compute_prediction_variance, compute_XtSigmaInvX
 from .rank_selection import select_rank_bic, select_rank_cv
 
 
+def _check_alpha(alpha: float) -> float:
+    """Validate a significance level.
+
+    ``stats.t.ppf(1 - alpha/2, df)`` is negative for ``alpha > 1``, which
+    silently returns intervals whose lower bound exceeds their upper bound, and
+    is NaN for ``alpha < 0``. Neither is reported as an error by the interval
+    machinery, so reject them here.
+
+    Args:
+        alpha: Significance level, in ``(0, 1)``.
+
+    Returns:
+        The validated level.
+
+    Raises:
+        ValueError: If ``alpha`` is not a finite number in ``(0, 1)``.
+    """
+    if not isinstance(alpha, (int, float)) or isinstance(alpha, bool):
+        raise ValueError(f"alpha must be a number in (0, 1), got {alpha!r}")
+    if not np.isfinite(alpha) or not (0.0 < float(alpha) < 1.0):
+        raise ValueError(f"alpha must be in (0, 1), got {alpha}")
+    return float(alpha)
+
+
 def _auto_rank(num_equations: int) -> int:
     """Heuristic rank used when the user does not provide one."""
     if num_equations <= 0:
@@ -232,7 +256,12 @@ class ALSGLS:
         return XB_from_Blist(X_list, self.B_list_)
 
     def score(self, Xs: Sequence[Any], Y: Any) -> float:
-        """Return the negative mean squared error of predictions on (Xs, Y)."""
+        """Return the negative Gaussian NLL per row of ``Y`` under the fitted Sigma.
+
+        Higher is better, as scikit-learn's ``score`` protocol requires. This
+        scores the whole fitted covariance, not just the conditional mean, so
+        it is not the negative MSE; use ``alsgls.mse`` for that.
+        """
         self._ensure_fitted()
         Y_arr = _asarray_2d(Y)
         if Y_arr.shape[1] != self.n_targets_:
@@ -248,7 +277,6 @@ class ALSGLS:
         """Variance-covariance matrix of parameter estimates."""
         self._ensure_fitted()
         if not hasattr(self, "_cov_params_cache"):
-            Xs = [np.zeros((self.n_obs_, p)) for p in self.n_features_in_]
             Xs = getattr(self, "_training_Xs", None)
             if Xs is None:
                 raise RuntimeError(
@@ -283,6 +311,7 @@ class ALSGLS:
                 model in count or in number of columns.
         """
         self._ensure_fitted()
+        alpha = _check_alpha(alpha)
 
         if return_type not in ("prediction", "confidence"):
             raise ValueError("return_type must be 'prediction' or 'confidence'")
@@ -336,8 +365,7 @@ class PredictionResults:
         Returns:
             ci: (N, K, 2) array with lower and upper bounds
         """
-        if alpha is None:
-            alpha = self._alpha_default
+        alpha = self._alpha_default if alpha is None else _check_alpha(alpha)
         q = stats.t.ppf(1 - alpha / 2, self._df)
         lower = self.predicted_mean - q * self.se_mean
         upper = self.predicted_mean + q * self.se_mean
@@ -352,8 +380,7 @@ class PredictionResults:
         Returns:
             ci: (N, K, 2) array with lower and upper bounds
         """
-        if alpha is None:
-            alpha = self._alpha_default
+        alpha = self._alpha_default if alpha is None else _check_alpha(alpha)
         q = stats.t.ppf(1 - alpha / 2, self._df)
         lower = self.predicted_mean - q * self.se_obs
         upper = self.predicted_mean + q * self.se_obs
@@ -593,6 +620,7 @@ class ALSGLSSystemResults:
         Returns:
             ci: (n_params, 2) array with lower and upper bounds
         """
+        alpha = _check_alpha(alpha)
         q = stats.t.ppf(1 - alpha / 2, self._resid_df())
         se = self.bse
         lower = self.params - q * se
@@ -636,6 +664,7 @@ class ALSGLSSystemResults:
                     raise ValueError("Design matrix has incompatible number of columns")
                 Xs.append(arr)
 
+        alpha = _check_alpha(alpha)
         predicted_mean = XB_from_Blist(Xs, self.B_list)
 
         var_mean = compute_prediction_variance(
@@ -667,6 +696,7 @@ class ALSGLSSystemResults:
         Returns:
             str: Formatted summary table
         """
+        alpha = _check_alpha(alpha)
         ci = self.conf_int(alpha)
         lines = []
         sep = "=" * 78

@@ -159,15 +159,33 @@ def _sanitize_regularization_params(
     Raises:
         ValueError: If regularization parameters are negative.
     """
-    if lam_F is not None and (not isinstance(lam_F, (int, float)) or lam_F < 0):
+    # ``nan < 0`` is False, so a bare non-negativity test lets NaN and inf
+    # through the very guard meant to reject bad penalties. NaN then makes
+    # every backtracked candidate NaN, so no step is ever accepted and F is
+    # returned at its initialization with no error and no warning.
+    if lam_F is not None and (
+        not isinstance(lam_F, (int, float))
+        or isinstance(lam_F, bool)
+        or not np.isfinite(lam_F)
+        or lam_F < 0
+    ):
         raise ValueError(
-            f"lam_F must be non-negative, got {lam_F}. "
+            f"lam_F must be a finite non-negative number, got {lam_F}. "
             f"Try lam_F=1e-3 for light regularization."
         )
 
-    if lam_B is not None and (not isinstance(lam_B, (int, float)) or lam_B < 0):
+    # ``nan < 0`` is False, so a bare non-negativity test lets NaN and inf
+    # through the very guard meant to reject bad penalties. NaN then makes
+    # every backtracked candidate NaN, so no step is ever accepted and F is
+    # returned at its initialization with no error and no warning.
+    if lam_B is not None and (
+        not isinstance(lam_B, (int, float))
+        or isinstance(lam_B, bool)
+        or not np.isfinite(lam_B)
+        or lam_B < 0
+    ):
         raise ValueError(
-            f"lam_B must be non-negative, got {lam_B}. "
+            f"lam_B must be a finite non-negative number, got {lam_B}. "
             f"Try lam_B=1e-3 for light regularization."
         )
 

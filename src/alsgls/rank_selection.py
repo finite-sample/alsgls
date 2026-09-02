@@ -27,7 +27,13 @@ def select_rank_bic(
 ) -> tuple[int, list[dict[str, Any]]]:
     """Select rank by minimizing BIC (Bayesian Information Criterion).
 
-    BIC(k) = N * nll_per_row + (n_params / 2) * log(N)
+    BIC(k) = 2 * N * nll_per_row + n_params * log(N)
+
+    which is the usual ``-2 * loglik + n_params * log(N)``, since
+    ``N * nll_per_row`` is the negative log-likelihood of the sample. The
+    value used to be reported at half this, so it was not comparable with the
+    ``bic`` attribute of statsmodels or any other package; the rank chosen is
+    unchanged, because halving is monotone.
 
     where n_params = K*(k+1) + k accounts for:
     - F: K x k loadings
@@ -57,7 +63,7 @@ def select_rank_bic(
             _, _, _, _, info = als_gls(Xs, Y, k=k, **als_kwargs)
             nll = info["nll_trace"][-1]
             n_params = K * (k + 1) + k
-            bic = N * nll + (n_params / 2) * np.log(N)
+            bic = 2 * N * nll + n_params * np.log(N)
             results.append(
                 {
                     "k": k,
