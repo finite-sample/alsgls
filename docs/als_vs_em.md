@@ -3,7 +3,7 @@
 This section compares the Alternating Least Squares (ALS) and Expectation-Maximization (EM) 
 approaches for low-rank+diagonal GLS estimation.
 
-**`em_gls()` is no longer part of the package.** It was removed in 2.0, and
+**`em_gls()` is no longer part of the package.** It was removed in 1.0, and
 the comparison below is why: both algorithms optimise the same likelihood and
 give statistically indistinguishable estimates, while EM's cost grows with the
 square of the number of equations. The mathematics and the measurements still
@@ -114,6 +114,6 @@ slower algorithm.
 The package provides both for comparison:
 
 - `als_gls()`: Memory-efficient ALS implementation
-- `em_gls()`: the baseline EM implementation these measurements used, removed in 2.0 and kept only in `als_sim/lowrank_gls/`  
+- `em_gls()`: the baseline EM implementation these measurements used, removed in 1.0 and kept only in `als_sim/lowrank_gls/`  
 
 Both use the same convergence criteria and regularization options for fair comparison.

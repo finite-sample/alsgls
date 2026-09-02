@@ -60,7 +60,7 @@ ls examples/
    the *joint* stationarity conditions, not coordinate-wise maximisation, so the
    loop measures the likelihood rather than assuming descent.
 
-`em_gls` was removed in 2.0; the exploratory EM code lives in `als_sim/` and is
+`em_gls` was removed in 1.0; the exploratory EM code lives in `als_sim/` and is
 not installed.
 
 ### Data Structure Conventions

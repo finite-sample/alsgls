@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+[Unreleased]: https://github.com/finite-sample/alsgls/compare/v2.0.0...HEAD
+
+## [2.0.0] - 2026-09-02
+
+Note on version history: PyPI has only ever carried 0.1.0. The 1.0.0 and 1.1.0
+entries below describe work that landed on the default branch but was never
+tagged or published, so for anyone installing from PyPI this release also
+carries everything in those two sections.
+
 ### Changed
 
 - **The Σ-step is now the closed-form factor-analysis update, and fitted values
@@ -26,7 +35,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and 10 on five fixtures whose true ranks are 2, 4, 5, 3 and 6, because the
   optimiser's shortfall shrank as `k` grew and so the likelihood kept improving
   for a reason unrelated to the data. It now recovers the true rank on all five.
-  The fit is also 4-5x faster in wall clock, because it converges and stops.
+  The fit is also faster in wall clock, 1.4x at K=20 rising to 2.1x at K=200,
+  because it converges and stops instead of running its sweep budget.
 
 - **`lam_B` is now relative to the residual variance scale.** An absolute ridge
   made the fit depend on the units of `Y`: at the default `1e-3`, scaling `Y` by
@@ -49,11 +59,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `nll_sigma_trace` alias, none of which have meaning without a line search. It
   gains `sigma_iters`, `var_ref` and `lam_B_eff`.
 
+### Fixed
+
+- **The `(F, D)` line search froze after two sweeps.** The backtracking ladder
+  proposed `(F + t*dF, D_mle(F + t*dF))`, whose `t -> 0` limit is
+  `(F, D_mle(F))` rather than the incumbent `(F, D)`. The guarded scale
+  correction moved `D` off that manifold, so every candidate started nats
+  behind the incumbent, all 40 halvings were rejected, and `F` never moved
+  again. Superseded by the closed-form step above, but fixed first so the two
+  changes could be reviewed apart.
+- **`beta` was stale relative to the returned `Sigma`.** The sweep ends on a
+  `Sigma` step, so `beta` solved the GLS normal equations at the *previous*
+  sweep's `Sigma`. This matters because `cov_params` reports
+  `(X' Sigma^-1 X)^-1` as `beta`'s variance, which is only its variance when
+  the two agree. `als_gls` now refreshes `beta` at the final `Sigma`.
+- **`select_rank_bic` reported half the textbook BIC** (`N*nll + p/2*log N`
+  where `-2*loglik + p*log N` is `2*N*nll + p*log N`), and counted parameters
+  that are not free while skipping ones that are. `n_params` is now
+  `K*k + K - k(k-1)/2 + sum(p_j)`: the loadings less the `k(k-1)/2` rotations
+  `F -> FQ` that leave `F F^T` fixed, the diagonal variances, and the
+  regression coefficients. Checked against R's `factanal`, which reports the
+  complementary `df = ((K-k)^2 - K - k)/2`.
+- **Out-of-domain arguments were accepted silently.** `lam_B = nan` passed the
+  non-negativity guard, since `nan < 0` is False, and returned `F` at its
+  initialisation with no error. `alpha` outside `(0, 1)` returned intervals
+  whose lower bound exceeded their upper for every parameter. `d_floor <= 0`
+  let `D` reach zero or go negative while the internals clipped at `1e-12`, so
+  the returned `(F, D)` described a different and not positive definite `Sigma`
+  from the one every reported number used. `sweeps=True` passed the
+  positive-integer check and ran one sweep. Non-finite data surfaced as
+  `SVD did not converge`. All are now rejected at the public boundary.
+- **`ALSGLS.score` documented the negative mean squared error** and returned
+  the negative log-likelihood per row.
+- **`d_floor` documented as an absolute variance** while being applied as a
+  fraction of the mean residual variance. The relative form is correct and
+  deliberate; only the docstring was wrong.
+- Documentation taught `em_gls()`, removed in 1.0, and used four argument names
+  `als_gls` has never accepted (`max_iter`, `tol`, `verbose`, and
+  `simulate_sur` kwargs that do not exist), so every example on three pages
+  failed on the import.
+- `cg_solve`'s positive-definiteness guard tested the previous iteration's
+  value while its message quoted the current one.
+
+### Changed (infrastructure)
+
 - Adopted the py-canon fleet standard: src/ layout, shared CI/docs/release
   workflows, ruff + pyright + pydoclint linting (mypy retired), and
   tag-driven trusted publishing.
+- `scikit-learn` added as a test-only dependency, used as an independent
+  implementation to check the `Sigma` step against.
 
-[Unreleased]: https://github.com/finite-sample/alsgls/commits/main
+[2.0.0]: https://github.com/finite-sample/alsgls/releases/tag/v2.0.0
 
 ## [1.1.0] - 2025-03-31
 
