@@ -99,6 +99,8 @@ def als_gls(
         not applied).
 
     Raises:
+        ValueError: If an argument is outside its domain, if ``Xs`` or ``Y``
+            holds a non-finite entry, or if their shapes disagree.
         np.linalg.LinAlgError: If a Cholesky factorisation of the Woodbury
             core fails, which means the current Sigma is not positive definite.
     """

@@ -53,15 +53,15 @@ def select_rank_bic(
     ``bic`` attribute of statsmodels or any other package; the rank chosen is
     unchanged, because halving is monotone.
 
-    ``n_params`` counts the free parameters of the whole fitted model:
+    ``n_params`` counts the free parameters of the whole fitted model: the
+    ``K*k`` factor loadings in ``F`` less the ``k*(k-1)/2`` orthogonal rotations
+    ``F -> F Q`` that leave ``F F^T`` unchanged and so are not identified, the
+    ``K`` diagonal variances in ``D``, and the ``sum(p_j)`` regression
+    coefficients, since ``nll_per_row`` is evaluated at the fitted ``beta`` and
+    a BIC has to charge for it. This is the standard factor-analysis count;
+    R's ``factanal`` reports the complementary ``df = ((K-k)^2 - K - k) / 2``.
 
-    - ``K*k`` factor loadings in ``F``, less ``k*(k-1)/2`` for the orthogonal
-      rotations ``F -> F Q`` that leave ``F F^T`` unchanged and so are not
-      identified. This is the standard factor-analysis count; R's ``factanal``
-      reports the complementary ``df = ((K-k)^2 - K - k) / 2``.
-    - ``K`` diagonal variances in ``D``.
-    - ``sum(p_j)`` regression coefficients, since ``nll_per_row`` is evaluated
-      at the fitted ``beta`` and a BIC has to charge for it.
+    A rank whose fit raised carries the message in its ``error`` key.
 
     The count used to be ``K*(k+1) + k``, which neither subtracted the rotational
     redundancy nor charged for ``beta``. Only the first term varies with ``k``,
@@ -77,8 +77,7 @@ def select_rank_bic(
 
     Returns:
         best_k: The rank with minimum BIC.
-        results: Per-rank results containing 'k', 'nll', 'bic', 'n_params' and
-            'converged'; entries that failed also carry 'error'.
+        results: Per-rank dicts of 'k', 'nll', 'bic', 'n_params', 'converged'.
 
     Raises:
         RuntimeError: If no candidate rank produced a usable fit.
