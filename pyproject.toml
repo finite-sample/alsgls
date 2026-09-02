@@ -1,27 +1,121 @@
 [build-system]
-requires = ["setuptools>=61.0"]
-build-backend = "setuptools.build_meta"
+requires = ["uv_build>=0.12.5,<0.13"]
+build-backend = "uv_build"
 
 [project]
 name = "alsgls"
-version = "0.1.0"
-description = "Lightweight low-rank+diag GLS/SUR via ALS with EM baseline"
+version = "2.0.0"
+description = "Type-safe lightweight low-rank+diagonal GLS/SUR solver via ALS"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.11"
 authors = [{ name = "Gaurav Sood", email = "contact@gsood.com" }]
-license = { text = "MIT" }
-urls = { "Homepage" = "https://github.com/finite-sample/alsgls" }
+license = "MIT"
+license-files = ["LICENSE"]
 classifiers = [
+  "Intended Audience :: Developers",
   "Programming Language :: Python :: 3",
-  "License :: OSI Approved :: MIT License",
-  "Operating System :: OS Independent",
 ]
 dependencies = [
   "numpy>=1.21",
+  "scipy>=1.17.1",
 ]
 
-[project.optional-dependencies]
-dev = ["pytest>=7.0"]
+[project.urls]
+Homepage = "https://github.com/finite-sample/alsgls"
+Documentation = "https://finite-sample.github.io/alsgls/"
+Repository = "https://github.com/finite-sample/alsgls"
 
-[tool.setuptools]
-packages = ["alsgls"]
+[project.optional-dependencies]
+pandas = ["pandas>=1.0"]
+
+[tool.uv.build-backend]
+module-name = "alsgls"
+
+[dependency-groups]
+dev = [
+  "ruff>=0.16.4",
+  "pyright>=1.1.390",
+  "pydoclint>=0.5",
+  "pre-commit>=4",
+  { include-group = "test" },
+]
+# simcheck is Monte Carlo test machinery. A dependency-group, not an extra: a
+# direct URL in published metadata is rejected by PyPI.
+test = [
+  "simcheck @ git+https://github.com/finite-sample/simcheck",
+  "pytest>=8",
+  "pytest-cov>=6",
+  # An independent implementation of the same covariance estimator, used as an
+  # external check on the Sigma step. Test-only; not needed to use alsgls.
+  "scikit-learn>=1.4",
+]
+docs = [
+  "sphinx>=8",
+  "py-canon @ git+https://github.com/gojiplus/py-canon@v1",
+  "furo",
+  "myst-parser",
+  "sphinx-copybutton",
+]
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+# als_sim holds exploratory notebooks and their support code, not the package.
+exclude = ["als_sim"]
+
+[tool.ruff.lint]
+external = ["DOC"]
+select = [
+    "E", "W", "F", "I", "B", "C4", "UP", "N", "D", "S", "SIM", "T20", "PT", "RUF",
+    "PTH", "RET", "PIE", "FURB", "PERF", "DTZ", "LOG", "G", "TC", "FLY",
+    "RSE", "SLOT", "FA", "A", "EXE", "ICN", "PGH", "PLE", "ARG", "SLF",
+]
+# D203/D213: the google convention the fleet standard picks. W191/D206/D300:
+# ruff's own docs list these as always incompatible with `ruff format`, which
+# the standard also runs.
+# N802/N803/N806: the public API and internals follow the linear-algebra
+# notation of the GLS/SUR literature (Xs, Y, B, F, D, XtX...); renaming to
+# lowercase would break the published API and detach the code from the math
+# it implements.
+ignore = ["D203", "D213", "W191", "D206", "D300", "N802", "N803", "N806"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+# Unused fixture arguments and private-member access are how tests are written.
+"tests/**" = ["S101", "D", "ARG", "SLF"]
+"docs/**" = ["D"]
+# Runnable demo scripts report through print by design.
+"examples/**" = ["T201"]
+"benchmarks/**" = ["T201"]
+
+[tool.pyright]
+include = ["src"]
+typeCheckingMode = "standard"
+
+[tool.pydoclint]
+style = "google"
+arg-type-hints-in-docstring = false
+check-return-types = false
+check-class-attributes = false
+allow-init-docstring = true
+exclude = '\.venv|tests|docs'
+arg-type-hints-in-signature = true
+
+[tool.codespell]
+# ALS (alternating least squares) is the package's subject, not a typo.
+ignore-words-list = "als"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+minversion = "6"
+log_level = "INFO"
+xfail_strict = true
+filterwarnings = ["error"]
+addopts = ["--strict-config", "--strict-markers", "-ra"]
+
+[tool.coverage.run]
+source = ["src"]
+
+[tool.preen]

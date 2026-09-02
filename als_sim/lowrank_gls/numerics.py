@@ -1,5 +1,5 @@
 import numpy as np
-from numpy.linalg import solve, LinAlgError
+from numpy.linalg import LinAlgError, solve
 
 
 def safe_inv(A, lam=1e-6):

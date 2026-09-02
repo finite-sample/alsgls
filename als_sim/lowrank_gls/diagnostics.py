@@ -1,8 +1,8 @@
 import numpy as np
 from numpy.linalg import eigh
-from scipy.stats import norm, chi2
+from scipy.stats import chi2, norm
 
-from .numerics import predict_Y, cf_matrix, siginv_apply_to_matrix, safe_inv
+from .numerics import cf_matrix, predict_Y, safe_inv, siginv_apply_to_matrix
 
 
 def _diag_sigma_diag(F, D):
