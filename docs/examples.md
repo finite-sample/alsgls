@@ -14,7 +14,7 @@ import numpy as np
 # Simulate SUR data
 # N_tr=300 observations, K=50 equations, p=3 regressors per equation, k=4 factors
 Xs_train, Y_train, Xs_test, Y_test = simulate_sur(
-    N_tr=300, N_te=100, K=50, p=3, k=4, noise_scale=0.1, factor_scale=1.0
+    N_tr=300, N_te=100, K=50, p=3, k=4, seed=0
 )
 
 print(f"Training data: {len(Xs_train)} equations")
@@ -22,12 +22,10 @@ print(f"Equation shapes: {[X.shape for X in Xs_train[:3]]}...")
 print(f"Response matrix: {Y_train.shape}")
 
 # Fit ALS model
-B, F, D, memory_usage, info = als_gls(
-    Xs_train, Y_train, k=4, max_iter=10, tol=1e-6, verbose=True
-)
+B, F, D, memory_usage, info = als_gls(Xs_train, Y_train, k=4, sweeps=10, rel_tol=1e-6)
 
-print(f"Converged in {info['iterations']} iterations")
-print(f"Final objective: {info['objective']:.6f}")
+print(f"Converged in {len(info['nll_trace']) - 1} iterations")
+print(f"Final objective: {info['nll_trace'][-1]:.6f}")
 print(f"Memory usage: {memory_usage:.3f} MB")
 
 # Make predictions and evaluate
@@ -41,7 +39,7 @@ print(f"Test MSE: {test_mse:.6f}")
 This example demonstrates the memory advantages for larger problems:
 
 ```python
-from alsgls import simulate_sur, als_gls, em_gls
+from alsgls import simulate_sur, als_gls
 import psutil
 import os
 
@@ -60,29 +58,20 @@ print(f"Problem size: {Y_tr.shape[0]} obs × {Y_tr.shape[1]} equations")
 print(f"Total parameters in dense Σ: {Y_tr.shape[1] ** 2:,}")
 print(f"Parameters in low-rank model: {Y_tr.shape[1] * 6 + Y_tr.shape[1]:,}")
 
-# Compare ALS vs EM
 mem_before = get_memory_usage()
 
 print("\\nFitting ALS model...")
-B_als, F_als, D_als, mem_als, info_als = als_gls(Xs_tr, Y_tr, k=6, max_iter=8)
-print(f"ALS converged in {info_als['iterations']} iterations")
+B_als, F_als, D_als, mem_als, info_als = als_gls(Xs_tr, Y_tr, k=6, sweeps=8)
+print(f"ALS converged in {len(info_als['nll_trace']) - 1} iterations")
 
-print("\\nFitting EM model...")
-B_em, F_em, D_em, mem_em, info_em = em_gls(Xs_tr, Y_tr, k=6, max_iter=30)
-print(f"EM converged in {info_em['iterations']} iterations")
 
-# Compare predictions
 Y_pred_als = XB_from_Blist(Xs_te, B_als)
-Y_pred_em = XB_from_Blist(Xs_te, B_em)
-
 mse_als = mse(Y_te, Y_pred_als)
-mse_em = mse(Y_te, Y_pred_em)
 
+dense_mb = Y_tr.shape[1] ** 2 * 8 / 1024 / 1024
 print(f"\\nResults:")
 print(f"ALS - Memory: {mem_als:.1f}MB, MSE: {mse_als:.6f}")
-print(f"EM  - Memory: {mem_em:.1f}MB, MSE: {mse_em:.6f}")
-print(f"Memory ratio (EM/ALS): {mem_em / mem_als:.1f}x")
-print(f"MSE difference: {abs(mse_als - mse_em):.2e}")
+print(f"A dense Sigma would need: {dense_mb:.1f}MB")
 ```
 
 ## Custom Data Example
@@ -141,7 +130,7 @@ for i, X in enumerate(Xs):
 print(f"  Responses: Y = {Y.shape}")
 
 # Fit the model
-B_hat, F, D, memory, info = als_gls(Xs, Y, k=2, max_iter=10, verbose=True)
+B_hat, F, D, memory, info = als_gls(Xs, Y, k=2, sweeps=10)
 
 print(f"\\nEstimated coefficients:")
 for i, b in enumerate(B_hat):
@@ -162,7 +151,7 @@ import matplotlib.pyplot as plt
 Xs_tr, Y_tr, _, _ = simulate_sur(N_tr=400, N_te=100, K=30, p=3, k=3)
 
 # Fit model
-B, F, D, _, _ = als_gls(Xs_tr, Y_tr, k=3, max_iter=15)
+B, F, D, _, _ = als_gls(Xs_tr, Y_tr, k=3, sweeps=15)
 
 print(f"Factor loadings shape: {F.shape}")
 print(f"Diagonal variances shape: {D.shape}")
@@ -197,6 +186,7 @@ Selecting the optimal number of factors using cross-validation:
 
 ```python
 from alsgls import simulate_sur, als_gls, XB_from_Blist, mse
+import matplotlib.pyplot as plt
 import numpy as np
 
 # Generate data
@@ -210,7 +200,7 @@ for k in k_values:
     print(f"Testing k={k}...")
 
     # Fit model
-    B, F, D, _, info = als_gls(Xs_tr, Y_tr, k=k, max_iter=10)
+    B, F, D, _, info = als_gls(Xs_tr, Y_tr, k=k, sweeps=10)
 
     # Validate
     Y_pred = XB_from_Blist(Xs_val, B)
@@ -241,7 +231,7 @@ Detailed timing and memory profiling:
 
 ```python
 import time
-from alsgls import simulate_sur, als_gls, em_gls
+from alsgls import simulate_sur, als_gls
 
 
 def profile_solver(solver_func, Xs, Y, k, **kwargs):
@@ -256,8 +246,8 @@ def profile_solver(solver_func, Xs, Y, k, **kwargs):
     return {
         "runtime": runtime,
         "memory": memory,
-        "iterations": info["iterations"],
-        "objective": info["objective"],
+        "iterations": len(info["nll_trace"]) - 1,
+        "objective": info["nll_trace"][-1],
         "B": B,
         "F": F,
         "D": D,
@@ -274,19 +264,11 @@ for N, K in problem_sizes:
     Xs, Y, _, _ = simulate_sur(N_tr=N, N_te=50, K=K, p=3, k=5)
 
     # Profile ALS
-    als_result = profile_solver(als_gls, Xs, Y, k=5, max_iter=8)
-
-    # Profile EM
-    em_result = profile_solver(em_gls, Xs, Y, k=5, max_iter=30)
+    als_result = profile_solver(als_gls, Xs, Y, k=5, sweeps=8)
 
     print(
         f"ALS: {als_result['runtime']:.2f}s, {als_result['memory']:.1f}MB, "
         f"{als_result['iterations']} iter"
     )
-    print(
-        f"EM:  {em_result['runtime']:.2f}s, {em_result['memory']:.1f}MB, "
-        f"{em_result['iterations']} iter"
-    )
-    print(f"Speedup: {em_result['runtime'] / als_result['runtime']:.1f}x")
-    print(f"Memory reduction: {em_result['memory'] / als_result['memory']:.1f}x")
+    print(f"Dense Sigma would need: {K**2 * 8 / 1024 / 1024:.1f}MB")
 ```

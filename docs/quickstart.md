@@ -88,27 +88,26 @@ classical SUR packages.
 
 ### Complete Example
 
-Here's a complete working example comparing ALS with the EM baseline:
+Here's a complete working example, fitting and scoring on held-out data:
 
 ```python
-from alsgls import simulate_sur, ALSGLS, em_gls, XB_from_Blist, mse
+from alsgls import simulate_sur, ALSGLS, mse
 
 Xs_tr, Y_tr, Xs_te, Y_te = simulate_sur(N_tr=240, N_te=120, K=60, p=3, k=4)
 
 als = ALSGLS(rank=4, max_sweeps=10)
 als.fit(Xs_tr, Y_tr)
-Y_pred_als = als.predict(Xs_te)
+Y_pred = als.predict(Xs_te)
 
-B_em, F_em, D_em, mem_em, _ = em_gls(Xs_tr, Y_tr, k=4)
-Y_pred_em = XB_from_Blist(Xs_te, B_em)
-
-mse_als = mse(Y_te, Y_pred_als)
-mse_em = mse(Y_te, Y_pred_em)
-
-print(f"ALS MSE: {mse_als:.6f}")
-print(f"EM MSE:  {mse_em:.6f}")
-print(f"ALS sweeps used: {len(als.info_['nll_trace']) - 1}")
+print(f"Test MSE: {mse(Y_te, Y_pred):.6f}")
+print(f"Sweeps used: {len(als.info_['nll_trace']) - 1}")
 ```
+
+Earlier versions of this example also fitted a dense EM baseline through
+`em_gls`. That function was removed in 2.0: it optimises the same likelihood
+and produces statistically indistinguishable estimates, at a cost growing with
+the square of the number of equations. See [ALS vs EM](als_vs_em.md) for the
+comparison behind that decision.
 
 ## Defaults and Troubleshooting
 
