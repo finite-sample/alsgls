@@ -7,8 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-[Unreleased]: https://github.com/finite-sample/alsgls/compare/v2.0.0...HEAD
-
 ## [2.0.0] - 2026-09-02
 
 Note on version history: PyPI has only ever carried 0.1.0. The 1.0.0 and 1.1.0
@@ -109,7 +107,7 @@ carries everything in those two sections.
 - `scikit-learn` added as a test-only dependency, used as an independent
   implementation to check the `Sigma` step against.
 
-[2.0.0]: https://github.com/finite-sample/alsgls/releases/tag/v2.0.0
+[Unreleased]: https://github.com/finite-sample/alsgls/commits/main
 
 ## [1.1.0] - 2025-03-31
 
