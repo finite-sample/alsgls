@@ -30,12 +30,10 @@ def test_end_to_end_nll_and_scale_guard():
         Xs,
         Y,
         k=4,
-        lam_F=1e-3,
         lam_B=1e-3,
         sweeps=25,
         cg_maxit=4000,
         cg_tol=1e-8,
-        scale_correct=True,
     )
 
     # Residuals and NLL trace

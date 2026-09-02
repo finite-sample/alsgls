@@ -80,15 +80,12 @@ class ALSGLS:
         rank_candidates: list[int] | None = None,
         cv_folds: int = 5,
         cv_random_state: int | None = None,
-        lam_F: float = 1e-3,
         lam_B: float = 1e-3,
         max_sweeps: int = 12,
         rel_tol: float = 1e-6,
         d_floor: float = 1e-8,
         cg_maxit: int = 800,
         cg_tol: float = 3e-7,
-        scale_correct: bool = True,
-        scale_floor: float = 1e-8,
     ) -> None:
         """Store the estimator hyperparameters.
 
@@ -100,30 +97,27 @@ class ALSGLS:
             rank_candidates: Candidate ranks for "bic" or "cv" selection.
             cv_folds: Number of folds for "cv" rank selection.
             cv_random_state: Random state for CV fold splits.
-            lam_F: Ridge penalty on the factor loadings.
-            lam_B: Ridge penalty on the coefficients.
+            lam_B: Ridge penalty on the coefficients, relative to the mean
+                initial residual variance so the fit does not depend on the
+                units of Y.
             max_sweeps: Maximum number of alternating sweeps.
             rel_tol: Relative decrease in the negative log-likelihood below
                 which the sweeps stop early.
-            d_floor: Smallest permitted diagonal variance.
+            d_floor: Floor on each diagonal variance, as a fraction of the mean
+                initial residual variance.
             cg_maxit: Iteration cap for the conjugate-gradient solve.
             cg_tol: Relative residual tolerance for that solve.
-            scale_correct: Apply the guarded MLE scale correction to Sigma.
-            scale_floor: Smallest permitted scale factor for that correction.
         """
         self.rank = rank
         self.rank_candidates = rank_candidates
         self.cv_folds = cv_folds
         self.cv_random_state = cv_random_state
-        self.lam_F = lam_F
         self.lam_B = lam_B
         self.max_sweeps = max_sweeps
         self.rel_tol = rel_tol
         self.d_floor = d_floor
         self.cg_maxit = cg_maxit
         self.cg_tol = cg_tol
-        self.scale_correct = scale_correct
-        self.scale_floor = scale_floor
 
     # ------------------------------------------------------------------
     # Scikit-learn estimator protocol
@@ -135,15 +129,12 @@ class ALSGLS:
             "rank_candidates": self.rank_candidates,
             "cv_folds": self.cv_folds,
             "cv_random_state": self.cv_random_state,
-            "lam_F": self.lam_F,
             "lam_B": self.lam_B,
             "max_sweeps": self.max_sweeps,
             "rel_tol": self.rel_tol,
             "d_floor": self.d_floor,
             "cg_maxit": self.cg_maxit,
             "cg_tol": self.cg_tol,
-            "scale_correct": self.scale_correct,
-            "scale_floor": self.scale_floor,
         }
 
     def set_params(self, **params: Any) -> ALSGLS:
@@ -160,14 +151,11 @@ class ALSGLS:
     def _als_kwargs(self) -> dict[str, Any]:
         """Common kwargs for als_gls calls."""
         return {
-            "lam_F": self.lam_F,
             "lam_B": self.lam_B,
             "sweeps": self.max_sweeps,
             "d_floor": self.d_floor,
             "cg_maxit": self.cg_maxit,
             "cg_tol": self.cg_tol,
-            "scale_correct": self.scale_correct,
-            "scale_floor": self.scale_floor,
             "rel_tol": self.rel_tol,
         }
 
@@ -283,7 +271,12 @@ class ALSGLS:
                     "Training design matrices not stored. "
                     "cov_params_ requires re-fitting or use ALSGLSSystem."
                 )
-            XtSinvX = compute_XtSigmaInvX(Xs, self.F_, self.D_, lam_B=self.lam_B)
+            # The fit charged lam_B / var_ref, so the variance has to charge the
+            # same thing; using the nominal lam_B here would report the variance
+            # of an estimator that was never computed.
+            XtSinvX = compute_XtSigmaInvX(
+                Xs, self.F_, self.D_, lam_B=self.info_["lam_B_eff"]
+            )
             self._cov_params_cache = np.linalg.inv(XtSinvX)
         return self._cov_params_cache
 
@@ -403,15 +396,12 @@ class ALSGLSSystem:
         system: Mapping[Any, tuple[Any, Any]] | Sequence[tuple[Any, tuple[Any, Any]]],
         *,
         rank: int | str | None = "auto",
-        lam_F: float = 1e-3,
         lam_B: float = 1e-3,
         max_sweeps: int = 12,
         rel_tol: float = 1e-6,
         d_floor: float = 1e-8,
         cg_maxit: int = 800,
         cg_tol: float = 3e-7,
-        scale_correct: bool = True,
-        scale_floor: float = 1e-8,
     ) -> None:
         """Parse and validate the equation system; see the class docstring."""
         items = list(system.items()) if isinstance(system, Mapping) else list(system)
@@ -444,15 +434,12 @@ class ALSGLSSystem:
 
         self._equations = equations
         self.rank = rank
-        self.lam_F = lam_F
         self.lam_B = lam_B
         self.max_sweeps = max_sweeps
         self.rel_tol = rel_tol
         self.d_floor = d_floor
         self.cg_maxit = cg_maxit
         self.cg_tol = cg_tol
-        self.scale_correct = scale_correct
-        self.scale_floor = scale_floor
 
     @property
     def equations(self) -> list[_SystemEquation]:
@@ -479,15 +466,12 @@ class ALSGLSSystem:
         """Fit the system with ALS-GLS and return a results container."""
         estimator = ALSGLS(
             rank=self.rank,
-            lam_F=self.lam_F,
             lam_B=self.lam_B,
             max_sweeps=self.max_sweeps,
             rel_tol=self.rel_tol,
             d_floor=self.d_floor,
             cg_maxit=self.cg_maxit,
             cg_tol=self.cg_tol,
-            scale_correct=self.scale_correct,
-            scale_floor=self.scale_floor,
         )
         Xs, Y = self.as_arrays()
         estimator.fit(Xs, Y)
@@ -575,8 +559,9 @@ class ALSGLSSystemResults:
         """
         if not hasattr(self, "_cov_params"):
             Xs = [eq.X for eq in self.model.equations]
-            lam_B = self.model.lam_B
-            XtSinvX = compute_XtSigmaInvX(Xs, self.F, self.D, lam_B=lam_B)
+            XtSinvX = compute_XtSigmaInvX(
+                Xs, self.F, self.D, lam_B=self.info["lam_B_eff"]
+            )
             self._cov_params = np.linalg.inv(XtSinvX)
         return self._cov_params
 

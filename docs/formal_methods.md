@@ -174,29 +174,44 @@ $$
 
 Solved via matrix-free conjugate gradient using the Woodbury identity.
 
-### F-Step: Gradient Descent
+### Sigma-Step: Closed Form
 
-The gradient of NLL with respect to $F$ is:
-
-$$
-\nabla_F \ell = \Sigma^{-1} F - \Sigma^{-1} S \Sigma^{-1} F + \lambda_F F
-$$
-
-where $S = R^T R / N$ is the sample covariance.
-
-**Derivation:**
-1. $\frac{\partial}{\partial F} \log |\Sigma| = 2 \Sigma^{-1} F$ (standard matrix derivative)
-2. $\frac{\partial}{\partial F} \text{tr}(\Sigma^{-1} S) = -2 \Sigma^{-1} S \Sigma^{-1} F$ (chain rule)
-
-### D-Step: Closed-Form MLE
-
-Given $F$, the optimal diagonal is:
+Given $D$, the maximising $F$ is available in closed form. Write $S = R^T R / N$
+and let $(\theta_1, p_1), \dots, (\theta_K, p_K)$ be the eigenpairs of
+$D^{-1/2} S D^{-1/2}$ in decreasing order, $P = (p_1, \dots, p_k)$ and
+$\Theta = \mathrm{diag}(\theta_1, \dots, \theta_k)$. Then
 
 $$
-d_j = \max\left( S_{jj} - (FF^T)_{jj}, d_{\min} \right)
+F = D^{1/2} P (\Theta - I_k)^{1/2},
 $$
 
-where $d_{\min} > 0$ ensures positive definiteness.
+with eigenvalues below 1 truncated to zero. This is the classical result of
+Lawley (see Lawley and Maxwell 1971, and eq. 8 of Fukasaku et al.,
+arXiv:2402.08181), and it is what `stats::factanal` in R and
+`sklearn.decomposition.FactorAnalysis` both compute.
+
+In implementation the eigendecomposition is never formed. Since
+$D^{-1/2} S D^{-1/2} = Z^T Z$ for $Z = R D^{-1/2} / \sqrt{N}$, the required
+eigenvectors are the top $k$ right singular vectors of the $N \times K$ matrix
+$Z$ and the eigenvalues are its squared singular values. No $K \times K$ matrix
+is materialised.
+
+Given $F$, the other stationarity condition is
+
+$$
+d_j = \max\left( S_{jj} - (FF^T)_{jj}, d_{\min} \right),
+$$
+
+with $d_{\min} > 0$ for positive definiteness.
+
+**What this is not.** $\mathrm{diag}(S - FF^T)$ is *not* the conditional
+maximiser of $D$ at fixed $F$. That condition is
+$\mathrm{diag}\!\left(\Sigma^{-1}(\Sigma - S)\Sigma^{-1}\right) = 0$, which has
+no closed-form solution. The pair above is a fixed point of the *joint*
+stationarity conditions, so alternating them is a fixed-point iteration rather
+than coordinate-wise maximisation and carries no descent guarantee of its own.
+The implementation therefore evaluates the likelihood at every inner iteration
+and returns the best iterate seen, which is what makes Theorem 1 hold.
 
 ---
 
@@ -207,18 +222,33 @@ where $d_{\min} > 0$ ensures positive definiteness.
 **Statement:** The NLL sequence $\{\ell^{(t)}\}$ is non-increasing: $\ell^{(t+1)} \leq \ell^{(t)}$.
 
 **Proof:**
-- The β-step minimizes NLL exactly (or with reversion safeguard)
-- The F-step uses gradient descent with backtracking line search
-- The D-step is closed-form MLE given F
-- Backtracking ensures each step is NLL-nonincreasing
+- The β-step minimises NLL exactly at fixed $\Sigma$, and reverts if the solve
+  lands short
+- The Σ-step returns the best iterate it evaluated, and is only accepted if it
+  improves on the incumbent
+- Neither step is accepted unless it lowers $\ell$
 
 Combined, each sweep satisfies $\ell^{(t+1)} \leq \ell^{(t)}$. □
 
+Note that the guard in the Σ-step is doing real work: the inner alternation is a
+fixed-point iteration and can in principle step past the optimum, so
+monotonicity comes from measuring the likelihood rather than from the form of
+the update.
+
 ### Theorem 2 (Convergence to Stationary Point)
 
-**Statement:** Under regularity conditions, the sequence $(\beta^{(t)}, F^{(t)}, D^{(t)})$ converges to a stationary point of the objective the iteration descends, $J = \ell + \tfrac{\lambda_F}{2}\lVert F\rVert_F^2$. With $\lambda_F = 0$ that objective is $\ell$ itself; with the default $\lambda_F = 10^{-3}$ the limit is a stationary point of $J$ and not of $\ell$.
+**Statement:** Under regularity conditions, the sequence $(\beta^{(t)}, F^{(t)}, D^{(t)})$ converges to a stationary point of $\ell$.
 
-Two caveats worth stating plainly. The ridge penalty is an absolute one, so the fitted $F$ is not invariant to the units of $Y$: under $Y \to sY$ the likelihood gradient scales as $1/s$ while $\lambda_F F$ scales as $s$, so the penalty dominates by a factor of $s^2$. And convergence here is asymptotic in the number of sweeps; the shipped defaults (8 for `als_gls`, 12 for `ALSGLS`) do not reach it on moderately sized problems.
+Both blocks are now exact, so there is no separate penalised objective to
+converge to instead: with $\lambda_B = 0$ the fixed point is the maximum
+likelihood estimate. The ridge $\lambda_B$ is expressed relative to the residual
+variance scale, so the fit is equivariant under $Y \to sY$ rather than depending
+on the units of $Y$.
+
+On the number of sweeps: the shipped defaults (8 for `als_gls`, 12 for
+`ALSGLS`) reach the fixed point on the problems tested, which the previous
+gradient-based F-step did not — it needed on the order of 1000. The test
+`test_the_default_sweep_budget_is_enough` gates this.
 
 **Proof sketch:**
 1. NLL is bounded below (by $-\infty$ from log-det, regularized to prevent this)
@@ -232,7 +262,7 @@ Two caveats worth stating plainly. The ridge penalty is an absolute one, so the 
 
 1. $E[X_j^T X_j]$ is full rank for each $j$
 2. $d_{\min} > 0$ enforces bounded eigenvalues
-3. Ridge regularization $\lambda_B, \lambda_F > 0$ ensures strict convexity in blocks
+3. Ridge regularization $\lambda_B > 0$ ensures strict convexity in the β block
 
 ---
 
@@ -322,7 +352,11 @@ $$
 \text{BIC}(k) = N \cdot \ell(k) + \frac{1}{2} p(k) \log(N)
 $$
 
-where $p(k) = K(k+1) + k$ is the number of parameters.
+where $p(k) = Kk + K - k(k-1)/2 + \sum_j p_j$ is the number of free parameters:
+the $Kk$ loadings less the $k(k-1)/2$ rotations $F \to FQ$ that leave $FF^T$
+fixed and so are not identified, the $K$ diagonal variances, and the regression
+coefficients. R's `factanal` reports the complementary
+$\mathrm{df} = ((K-k)^2 - K - k)/2$.
 
 ---
 

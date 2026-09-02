@@ -8,6 +8,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+
+- **The Σ-step is now the closed-form factor-analysis update, and fitted values
+  change for every user.** The factor loadings were previously fitted by
+  steepest descent with a backtracking line search, which stopped improving
+  after about two sweeps and left the fit 2 to 20 nats/row short of the
+  likelihood the same objective reaches from the same starting point. Running
+  more sweeps did not help: 500 sweeps produced bit-identical output to 4.
+
+  Given `D`, the maximising `F` has a closed form going back to Lawley, obtained
+  from the top `k` right singular vectors of the `D`-standardised residuals.
+  This is what `sklearn.decomposition.FactorAnalysis` computes and what R's
+  `stats::factanal` optimises over; the new implementation agrees with sklearn's
+  to 1e-7 on the implied covariance and to 1e-9 on the likelihood.
+
+  The visible consequence is rank selection. `select_rank_bic` chose 4, 8, 6, 7
+  and 10 on five fixtures whose true ranks are 2, 4, 5, 3 and 6, because the
+  optimiser's shortfall shrank as `k` grew and so the likelihood kept improving
+  for a reason unrelated to the data. It now recovers the true rank on all five.
+  The fit is also 4-5x faster in wall clock, because it converges and stops.
+
+- **`lam_B` is now relative to the residual variance scale.** An absolute ridge
+  made the fit depend on the units of `Y`: at the default `1e-3`, scaling `Y` by
+  `1e4` moved every coefficient by 100% and the estimated correlation matrix by
+  1.16. The fit is now equivariant under `Y -> sY`.
+
+### Removed
+
+- **`lam_F`**, from `als_gls`, `ALSGLS` and `ALSGLSSystem`. The Σ-step is the
+  exact conditional solution, so there is no search direction for a penalty on
+  `F` to bias. It never described a coherent estimator: the direction was
+  penalised while acceptance was tested on the unpenalised likelihood, so the
+  iteration could stop at a point stationary for neither, and it was the sole
+  cause of the scale-dependence above.
+- **`scale_correct` and `scale_floor`.** The guarded rescaling of Σ existed to
+  patch the gradient step. Measured after a closed-form step, the optimal scale
+  factor is 0.9999995 — a no-op.
+- **`grad_F_nll`** from `alsgls.ops`, now unused.
+- `info` no longer carries `accept_t`, `scale_used`, `obj_trace` or the
+  `nll_sigma_trace` alias, none of which have meaning without a line search. It
+  gains `sigma_iters`, `var_ref` and `lam_B_eff`.
+
 - Adopted the py-canon fleet standard: src/ layout, shared CI/docs/release
   workflows, ruff + pyright + pydoclint linting (mypy retired), and
   tag-driven trusted publishing.

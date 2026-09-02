@@ -300,57 +300,6 @@ def compute_XtSigmaInvX(
     return XtSinvX
 
 
-def grad_F_nll(
-    R: np.ndarray,
-    F: np.ndarray,
-    D: np.ndarray,
-    Dinv: np.ndarray,
-    C_chol: np.ndarray,
-    lam_F: float = 0.0,
-) -> np.ndarray:
-    """Compute gradient of NLL w.r.t. F using Woodbury algebra.
-
-    The NLL is: L = 0.5 * [tr(R Σ^{-1} R^T)/N + log|Σ| + K log(2π)]
-
-    The gradient (derived via matrix calculus) is:
-        ∂L/∂F = Σ^{-1} F - Σ^{-1} S Σ^{-1} F + λ_F * F
-
-    where S = R^T R / N is the sample covariance.
-
-    Args:
-        R: Residual matrix
-        F: Factor loadings
-        D: Diagonal variances (used for Σ = F F^T + diag(D))
-        Dinv: Pre-computed 1/D
-        C_chol: Cholesky factor of C = I + F^T D^{-1} F
-        lam_F: Ridge penalty on F
-
-    Returns:
-        grad: Gradient of NLL w.r.t. F
-    """
-    N, _ = R.shape
-
-    # Sample covariance S = R^T R (not divided by N yet, will divide later)
-    S = R.T @ R  # K x K
-
-    # Σ^{-1} F
-    SigmaInvF = apply_siginv_F(F, Dinv, C_chol)  # K x k
-
-    # Need Σ^{-1} @ S, but apply_siginv_to_matrix computes M @ Σ^{-1}
-    # Since both Σ^{-1} and S are symmetric: Σ^{-1} @ S = (S @ Σ^{-1})^T
-    S_SigmaInv = apply_siginv_to_matrix(S, F, D, Dinv=Dinv, C_chol=C_chol)  # S @ Σ^{-1}
-    SigmaInv_S = S_SigmaInv.T  # Σ^{-1} @ S (K x K)
-
-    # Σ^{-1} S Σ^{-1} F
-    SigmaInv_S_SigmaInvF = SigmaInv_S @ SigmaInvF  # K x k
-
-    # Gradient: Σ^{-1} F - (1/N) Σ^{-1} S Σ^{-1} F + λ_F * F
-    # where S = R^T R (not divided by N)
-    grad = SigmaInvF - (1.0 / N) * SigmaInv_S_SigmaInvF + lam_F * F
-
-    return np.asarray(grad)
-
-
 def compute_prediction_variance(
     Xs: Sequence[np.ndarray],
     F: np.ndarray,

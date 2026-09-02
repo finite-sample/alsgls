@@ -36,7 +36,7 @@ where:
 - D is K×1 diagonal noise vector (K parameters)
 - k << K is the latent factor rank
 
-Total parameters: K(k+1) << K²
+Total parameters: Kk + K - k(k-1)/2 << K²
 
 ## The Woodbury Identity
 
@@ -92,7 +92,7 @@ The algorithm stops when:
 
 1. Relative NLL improvement < rel_tol (default 1e-6)
 2. Number of sweeps exceeds max_sweeps
-3. Line search fails (accept_t = 0)
+3. The maximum number of sweeps is reached
 
 ## Computational Complexity
 

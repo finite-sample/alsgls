@@ -198,8 +198,8 @@ def _sanitize_regularization_params(
 
 
 def _validate_gls_inputs(
-    Xs: Any, Y: Any, k: Any, *, lam_F: float | None = None, lam_B: float | None = None
-) -> tuple[list[np.ndarray], np.ndarray, int, float, float]:
+    Xs: Any, Y: Any, k: Any, *, lam_B: float | None = None
+) -> tuple[list[np.ndarray], np.ndarray, int, float]:
     """Comprehensive validation for GLS solver inputs.
 
     This function combines all individual validation steps for consistency.
@@ -208,11 +208,10 @@ def _validate_gls_inputs(
         Xs: Design matrices.
         Y: Response matrix.
         k: Rank parameter.
-        lam_F: Ridge penalty on the factor loadings.
         lam_B: Ridge penalty on the coefficients.
 
     Returns:
-        tuple: Validated (Xs, Y, k, lam_F, lam_B).
+        tuple: Validated (Xs, Y, k, lam_B).
     """
     # Step 1: Validate individual components
     Xs_valid = _validate_design_matrices(Xs)
@@ -222,38 +221,12 @@ def _validate_gls_inputs(
     _validate_finite(Y_valid, "Y")
     N, K = Y_valid.shape
     k_valid = _validate_rank_parameter(k, N, K)
-    lam_F_valid, lam_B_valid = _sanitize_regularization_params(lam_F, lam_B)
+    _, lam_B_valid = _sanitize_regularization_params(None, lam_B)
 
     # Step 2: Check compatibility
     _check_array_compatibility(Xs_valid, Y_valid)
 
-    return Xs_valid, Y_valid, k_valid, lam_F_valid, lam_B_valid
-
-
-def _validate_positive_float(value: Any, name: str, *, hint: str) -> float:
-    """Require a strictly positive finite float.
-
-    Args:
-        value: The supplied value.
-        name: Parameter name, for the error message.
-        hint: Short suggestion appended to the error.
-
-    Returns:
-        The validated value.
-
-    Raises:
-        ValueError: If ``value`` is not a positive finite number.
-    """
-    if (
-        not isinstance(value, (int, float))
-        or isinstance(value, bool)
-        or not np.isfinite(value)
-        or value <= 0
-    ):
-        raise ValueError(
-            f"{name} must be a positive finite number, got {value}. {hint}"
-        )
-    return float(value)
+    return Xs_valid, Y_valid, k_valid, lam_B_valid
 
 
 def _validate_finite(arr: np.ndarray, name: str) -> None:

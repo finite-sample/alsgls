@@ -716,9 +716,7 @@ def _mc_studies(n, reps=MC_REPS, seed=0):
         system = {f"eq{j}": (Y[:, j], Xs[j]) for j in range(MC_K)}
         # lam_B=0: a ridge penalty biases the coefficients on purpose and is not
         # reflected in cov_params either, which would confound the two defects.
-        fitted = ALSGLSSystem(
-            system, rank=MC_RANK, lam_F=1e-6, lam_B=0.0, max_sweeps=12
-        ).fit()
+        fitted = ALSGLSSystem(system, rank=MC_RANK, lam_B=0.0, max_sweeps=12).fit()
         interval = fitted.conf_int(alpha=0.05)
         store = recorded["alsgls"]
         store["estimate"][i] = fitted.params

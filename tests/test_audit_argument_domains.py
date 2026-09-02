@@ -19,7 +19,7 @@ def data():
 
 
 @pytest.mark.parametrize("bad", [np.nan, np.inf, -np.inf])
-@pytest.mark.parametrize("name", ["lam_F", "lam_B"])
+@pytest.mark.parametrize("name", ["lam_B"])
 def test_non_finite_penalties_are_rejected(data, name: str, bad: float) -> None:
     """``nan < 0`` is False, so NaN used to pass the non-negativity guard and
     make every backtracked candidate NaN: F was returned at its initialization
@@ -32,7 +32,7 @@ def test_non_finite_penalties_are_rejected(data, name: str, bad: float) -> None:
 def test_finite_penalties_still_accepted(data) -> None:
     Xs, Y = data
     for value in (0.0, 1e-3, 5):
-        als_gls(Xs, Y, k=2, sweeps=1, lam_F=value, lam_B=value)
+        als_gls(Xs, Y, k=2, sweeps=1, lam_B=value)
 
 
 @pytest.mark.parametrize("bad", [-0.5, 0.0, 1.0, 1.5, np.nan, np.inf])
@@ -89,7 +89,7 @@ def test_score_is_the_negative_nll_not_the_negative_mse(data) -> None:
 
 
 @pytest.mark.parametrize("bad", [-1.0, 0.0, np.nan, np.inf])
-@pytest.mark.parametrize("name", ["d_floor", "scale_floor"])
+@pytest.mark.parametrize("name", ["d_floor"])
 def test_non_positive_floors_are_rejected(data, name: str, bad: float) -> None:
     """d_floor <= 0 let D reach zero or go negative while woodbury_chol clipped
     it at 1e-12 internally, so the returned (F, D) described a different and
@@ -110,7 +110,6 @@ def test_returned_D_is_always_positive(data) -> None:
     [
         ({"sweeps": True}, "positive integer"),
         ({"cg_maxit": True}, "positive integer"),
-        ({"scale_correct": "yes"}, "must be a bool"),
         ({"rel_tol": np.inf}, "finite"),
         ({"cg_tol": np.nan}, "finite"),
     ],
@@ -156,18 +155,14 @@ def test_bic_counts_identified_parameters(data) -> None:
         assert r["n_params"] == _n_params(K, r["k"], p_total)
 
 
-def test_objective_trace_is_the_monotone_one(data) -> None:
-    """The line search descends NLL + lam_F/2 ||F||^2, so that is what is
-    guaranteed non-increasing; nll_trace stays equal to nll_per_row at the
-    returned parameters so the reported likelihood is self-consistent."""
+def test_nll_trace_is_self_consistent_and_monotone(data) -> None:
+    """With no penalty there is one objective, so the reported trace is both the
+    likelihood at the returned parameters and the monotone one."""
     from alsgls import XB_from_Blist, nll_per_row
 
     Xs, Y = data
-    B, F, D, _, info = als_gls(Xs, Y, k=2, sweeps=25, lam_F=1e-2, rel_tol=0.0)
-    assert np.diff(info["obj_trace"]).max() <= 1e-9
+    B, F, D, _, info = als_gls(Xs, Y, k=2, sweeps=25, rel_tol=0.0)
+    assert np.diff(info["nll_trace"]).max() <= 1e-9
     assert info["nll_trace"][-1] == pytest.approx(
         nll_per_row(Y - XB_from_Blist(Xs, B), F, D)
-    )
-    assert info["obj_trace"][-1] == pytest.approx(
-        info["nll_trace"][-1] + 0.5 * 1e-2 * float(np.sum(F**2))
     )

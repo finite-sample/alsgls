@@ -113,9 +113,7 @@ def test_the_coefficients_are_unbiased(equation):
         Y = _draw_y(rng, TRUTH_XS, TRUTH_B, TRUTH_F, TRUTH_D)
         # lam_B=0: a ridge penalty biases coefficients toward zero on purpose,
         # so leaving it on would make this test assert the wrong thing.
-        B_hat, _, _, _, _ = als_gls(
-            TRUTH_XS, Y, k=RANK, lam_F=1e-6, lam_B=0.0, sweeps=12
-        )
+        B_hat, _, _, _, _ = als_gls(TRUTH_XS, Y, k=RANK, lam_B=0.0, sweeps=12)
         return Estimate(value=float(B_hat[equation][0, 0]))
 
     result = monte_carlo(replicate, truth=target, reps=REPS, seed=equation)
@@ -134,9 +132,7 @@ def test_the_ridge_penalty_is_caught_biasing_toward_zero():
 
     def replicate(rng: np.random.Generator) -> Estimate:
         Y = _draw_y(rng, TRUTH_XS, TRUTH_B, TRUTH_F, TRUTH_D)
-        B_hat, _, _, _, _ = als_gls(
-            TRUTH_XS, Y, k=RANK, lam_F=1e-6, lam_B=1e6, sweeps=12
-        )
+        B_hat, _, _, _, _ = als_gls(TRUTH_XS, Y, k=RANK, lam_B=1e6, sweeps=12)
         return Estimate(value=float(B_hat[0][0, 0]))
 
     result = monte_carlo(replicate, truth=target, reps=REPS, seed=99)
@@ -162,7 +158,7 @@ def test_the_estimator_is_consistent():
 
         def replicate(rng: np.random.Generator, Xs=Xs) -> Estimate:
             Y = _draw_y(rng, Xs, TRUTH_B, TRUTH_F, TRUTH_D)
-            B_hat, _, _, _, _ = als_gls(Xs, Y, k=RANK, lam_F=1e-6, lam_B=0.0, sweeps=12)
+            B_hat, _, _, _, _ = als_gls(Xs, Y, k=RANK, lam_B=0.0, sweeps=12)
             return Estimate(value=float(B_hat[0][0, 0]))
 
         result = monte_carlo(replicate, truth=float(TRUTH_B[0][0, 0]), reps=120, seed=7)
