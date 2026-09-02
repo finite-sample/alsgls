@@ -153,12 +153,16 @@ def cg_solve(
 
         z = M_pre(r) if M_pre is not None else r
         rz_new = float(r @ z)
-        if rz_old <= 0:
+        # Guard the quantity actually divided by, and report the one that is
+        # wrong. The check used to test rz_old while the message quoted r^T z,
+        # so a non-positive rz_new was only caught one iteration later, after
+        # it had already been used as a numerator.
+        if rz_new <= 0 or rz_old <= 0:
             raise ValueError(
-                "Preconditioner is not positive definite: r^T z ≤ 0. "
-                "This indicates a problem with the preconditioner. "
-                "Try disabling preconditioning (M_pre=None) or using "
-                "simpler preconditioning."
+                f"Preconditioner is not positive definite: r^T z = {rz_new:.3e} "
+                f"(previous {rz_old:.3e}), and conjugate gradients requires it "
+                "to be positive. Try disabling preconditioning (M_pre=None) or "
+                "using simpler preconditioning."
             )
         beta = rz_new / rz_old
         p = z + beta * p
@@ -230,6 +234,12 @@ def compute_XtSigmaInvX(
     matrix cross-product for computing coefficient standard errors:
 
         Var(β̂) = (X'Σ⁻¹X + λI)⁻¹
+
+    This is exact only when ``lam_B`` is 0. For a ridge estimator the variance
+    is the sandwich ``A⁻¹ (X'Σ⁻¹X) A⁻¹`` with ``A = X'Σ⁻¹X + λI``, and the form
+    above understates it; at the default ``lam_B = 1e-3`` the difference is
+    negligible, but it grows with the penalty. Σ is also treated as known rather
+    than estimated, which is the usual feasible-GLS convention.
 
     Using Woodbury: Σ⁻¹ = D⁻¹ - D⁻¹F C⁻¹ F'D⁻¹ where C = I + F'D⁻¹F
 

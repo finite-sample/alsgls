@@ -159,15 +159,33 @@ def _sanitize_regularization_params(
     Raises:
         ValueError: If regularization parameters are negative.
     """
-    if lam_F is not None and (not isinstance(lam_F, (int, float)) or lam_F < 0):
+    # ``nan < 0`` is False, so a bare non-negativity test lets NaN and inf
+    # through the very guard meant to reject bad penalties. NaN then makes
+    # every backtracked candidate NaN, so no step is ever accepted and F is
+    # returned at its initialization with no error and no warning.
+    if lam_F is not None and (
+        not isinstance(lam_F, (int, float))
+        or isinstance(lam_F, bool)
+        or not np.isfinite(lam_F)
+        or lam_F < 0
+    ):
         raise ValueError(
-            f"lam_F must be non-negative, got {lam_F}. "
+            f"lam_F must be a finite non-negative number, got {lam_F}. "
             f"Try lam_F=1e-3 for light regularization."
         )
 
-    if lam_B is not None and (not isinstance(lam_B, (int, float)) or lam_B < 0):
+    # ``nan < 0`` is False, so a bare non-negativity test lets NaN and inf
+    # through the very guard meant to reject bad penalties. NaN then makes
+    # every backtracked candidate NaN, so no step is ever accepted and F is
+    # returned at its initialization with no error and no warning.
+    if lam_B is not None and (
+        not isinstance(lam_B, (int, float))
+        or isinstance(lam_B, bool)
+        or not np.isfinite(lam_B)
+        or lam_B < 0
+    ):
         raise ValueError(
-            f"lam_B must be non-negative, got {lam_B}. "
+            f"lam_B must be a finite non-negative number, got {lam_B}. "
             f"Try lam_B=1e-3 for light regularization."
         )
 
@@ -199,6 +217,9 @@ def _validate_gls_inputs(
     # Step 1: Validate individual components
     Xs_valid = _validate_design_matrices(Xs)
     Y_valid = _validate_response_matrix(Y)
+    for j, X in enumerate(Xs_valid):
+        _validate_finite(X, f"Xs[{j}]")
+    _validate_finite(Y_valid, "Y")
     N, K = Y_valid.shape
     k_valid = _validate_rank_parameter(k, N, K)
     lam_F_valid, lam_B_valid = _sanitize_regularization_params(lam_F, lam_B)
@@ -207,6 +228,54 @@ def _validate_gls_inputs(
     _check_array_compatibility(Xs_valid, Y_valid)
 
     return Xs_valid, Y_valid, k_valid, lam_F_valid, lam_B_valid
+
+
+def _validate_positive_float(value: Any, name: str, *, hint: str) -> float:
+    """Require a strictly positive finite float.
+
+    Args:
+        value: The supplied value.
+        name: Parameter name, for the error message.
+        hint: Short suggestion appended to the error.
+
+    Returns:
+        The validated value.
+
+    Raises:
+        ValueError: If ``value`` is not a positive finite number.
+    """
+    if (
+        not isinstance(value, (int, float))
+        or isinstance(value, bool)
+        or not np.isfinite(value)
+        or value <= 0
+    ):
+        raise ValueError(
+            f"{name} must be a positive finite number, got {value}. {hint}"
+        )
+    return float(value)
+
+
+def _validate_finite(arr: np.ndarray, name: str) -> None:
+    """Reject non-finite entries at the public boundary.
+
+    Without this the first SVD fails with ``SVD did not converge``, which says
+    nothing about which input was bad or why.
+
+    Args:
+        arr: Array to check.
+        name: Name used in the error message.
+
+    Raises:
+        ValueError: If ``arr`` holds a NaN or an infinity.
+    """
+    if not np.isfinite(arr).all():
+        n_nan = int(np.isnan(arr).sum())
+        n_inf = int(np.isinf(arr).sum())
+        raise ValueError(
+            f"{name} contains {n_nan} NaN and {n_inf} infinite entries. "
+            "alsgls has no missing-data handling; drop or impute those rows first."
+        )
 
 
 def _validate_convergence_params(
@@ -230,7 +299,7 @@ def _validate_convergence_params(
     params: dict[str, int | float] = {}
 
     if sweeps is not None:
-        if not isinstance(sweeps, int) or sweeps < 1:
+        if not isinstance(sweeps, int) or isinstance(sweeps, bool) or sweeps < 1:
             raise ValueError(
                 f"sweeps must be a positive integer, got {sweeps}. "
                 f"Try sweeps=8 for typical problems."
@@ -238,15 +307,20 @@ def _validate_convergence_params(
         params["sweeps"] = sweeps
 
     if rel_tol is not None:
-        if not isinstance(rel_tol, (int, float)) or rel_tol < 0:
+        if (
+            not isinstance(rel_tol, (int, float))
+            or isinstance(rel_tol, bool)
+            or not np.isfinite(rel_tol)
+            or rel_tol < 0
+        ):
             raise ValueError(
-                f"rel_tol must be non-negative, got {rel_tol}. "
+                f"rel_tol must be a finite non-negative number, got {rel_tol}. "
                 f"Try rel_tol=1e-6 for standard convergence."
             )
         params["rel_tol"] = float(rel_tol)
 
     if cg_maxit is not None:
-        if not isinstance(cg_maxit, int) or cg_maxit < 1:
+        if not isinstance(cg_maxit, int) or isinstance(cg_maxit, bool) or cg_maxit < 1:
             raise ValueError(
                 f"cg_maxit must be a positive integer, got {cg_maxit}. "
                 f"Try cg_maxit=800 for typical problems."
@@ -254,9 +328,14 @@ def _validate_convergence_params(
         params["cg_maxit"] = cg_maxit
 
     if cg_tol is not None:
-        if not isinstance(cg_tol, (int, float)) or cg_tol <= 0:
+        if (
+            not isinstance(cg_tol, (int, float))
+            or isinstance(cg_tol, bool)
+            or not np.isfinite(cg_tol)
+            or cg_tol <= 0
+        ):
             raise ValueError(
-                f"cg_tol must be positive, got {cg_tol}. "
+                f"cg_tol must be a finite positive number, got {cg_tol}. "
                 f"Try cg_tol=3e-7 for standard accuracy."
             )
         params["cg_tol"] = float(cg_tol)

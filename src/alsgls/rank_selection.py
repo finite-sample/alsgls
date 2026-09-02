@@ -11,6 +11,24 @@ from .metrics import nll_per_row
 from .ops import XB_from_Blist
 
 
+def _n_params(K: int, k: int, p_total: int) -> int:
+    """Free parameters of the low-rank-plus-diagonal SUR model.
+
+    ``F`` contributes ``K*k`` loadings less the ``k*(k-1)/2`` dimensions of the
+    orthogonal group that leave ``F F^T`` fixed, ``D`` contributes ``K``, and
+    the regression contributes ``p_total``.
+
+    Args:
+        K: Number of equations.
+        k: Factor rank.
+        p_total: Total number of regression coefficients.
+
+    Returns:
+        The number of free parameters.
+    """
+    return K * k + K - k * (k - 1) // 2 + p_total
+
+
 def _default_k_candidates(K: int) -> list[int]:
     """Generate default candidate ranks based on number of equations."""
     max_k = min(K // 2, 12)
@@ -27,11 +45,28 @@ def select_rank_bic(
 ) -> tuple[int, list[dict[str, Any]]]:
     """Select rank by minimizing BIC (Bayesian Information Criterion).
 
-    BIC(k) = N * nll_per_row + (n_params / 2) * log(N)
+    BIC(k) = 2 * N * nll_per_row + n_params * log(N)
 
-    where n_params = K*(k+1) + k accounts for:
-    - F: K x k loadings
-    - D: K diagonal variances
+    which is the usual ``-2 * loglik + n_params * log(N)``, since
+    ``N * nll_per_row`` is the negative log-likelihood of the sample. The
+    value used to be reported at half this, so it was not comparable with the
+    ``bic`` attribute of statsmodels or any other package; the rank chosen is
+    unchanged, because halving is monotone.
+
+    ``n_params`` counts the free parameters of the whole fitted model: the
+    ``K*k`` factor loadings in ``F`` less the ``k*(k-1)/2`` orthogonal rotations
+    ``F -> F Q`` that leave ``F F^T`` unchanged and so are not identified, the
+    ``K`` diagonal variances in ``D``, and the ``sum(p_j)`` regression
+    coefficients, since ``nll_per_row`` is evaluated at the fitted ``beta`` and
+    a BIC has to charge for it. This is the standard factor-analysis count;
+    R's ``factanal`` reports the complementary ``df = ((K-k)^2 - K - k) / 2``.
+
+    A rank whose fit raised carries the message in its ``error`` key.
+
+    The count used to be ``K*(k+1) + k``, which neither subtracted the rotational
+    redundancy nor charged for ``beta``. Only the first term varies with ``k``,
+    so on the fixtures tested the selected rank is unchanged; the reported value
+    was wrong either way.
 
     Args:
         Xs: Design matrices for each equation.
@@ -42,7 +77,7 @@ def select_rank_bic(
 
     Returns:
         best_k: The rank with minimum BIC.
-        results: Per-rank results containing 'k', 'nll', 'bic', 'n_params'.
+        results: Per-rank dicts of 'k', 'nll', 'bic', 'n_params', 'converged'.
 
     Raises:
         RuntimeError: If no candidate rank produced a usable fit.
@@ -56,8 +91,8 @@ def select_rank_bic(
         try:
             _, _, _, _, info = als_gls(Xs, Y, k=k, **als_kwargs)
             nll = info["nll_trace"][-1]
-            n_params = K * (k + 1) + k
-            bic = N * nll + (n_params / 2) * np.log(N)
+            n_params = _n_params(K, k, sum(X.shape[1] for X in Xs))
+            bic = 2 * N * nll + n_params * np.log(N)
             results.append(
                 {
                     "k": k,
@@ -67,8 +102,19 @@ def select_rank_bic(
                     "converged": True,
                 }
             )
-        except Exception:
-            results.append({"k": k, "nll": np.inf, "bic": np.inf, "converged": False})
+        except (np.linalg.LinAlgError, ValueError, RuntimeError) as exc:
+            # Narrow: a bare ``except Exception`` here also swallowed
+            # KeyboardInterrupt-adjacent bugs and typos in ``als_kwargs``,
+            # reporting them as a rank that merely failed to converge.
+            results.append(
+                {
+                    "k": k,
+                    "nll": np.inf,
+                    "bic": np.inf,
+                    "converged": False,
+                    "error": f"{type(exc).__name__}: {exc}",
+                }
+            )
 
     valid_results = [r for r in results if r.get("converged", False)]
     if not valid_results:
@@ -136,7 +182,7 @@ def select_rank_cv(
                 R_val = Y_val - XB_from_Blist(Xs_val, B)
                 val_nll = nll_per_row(R_val, F, D)
                 fold_nlls.append(val_nll)
-            except Exception:
+            except (np.linalg.LinAlgError, ValueError, RuntimeError):
                 fold_nlls.append(np.inf)
 
         cv_nll = float(np.mean(fold_nlls))

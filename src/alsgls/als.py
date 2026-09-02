@@ -6,7 +6,11 @@ from typing import Any
 
 import numpy as np
 
-from ._validation import _validate_convergence_params, _validate_gls_inputs
+from ._validation import (
+    _validate_convergence_params,
+    _validate_gls_inputs,
+    _validate_positive_float,
+)
 from .metrics import nll_per_row
 from .ops import (
     XB_from_Blist,
@@ -65,8 +69,14 @@ def als_gls(
         lam_B: Ridge penalty on the coefficients ``beta``.
         sweeps: Maximum number of alternating passes over ``beta`` and
             ``(F, D)``.
-        d_floor: Smallest permitted diagonal variance, which keeps ``D`` positive
-            definite and the Woodbury inverse well conditioned.
+        d_floor: Floor on each diagonal variance, expressed as a fraction of the
+            mean initial residual variance rather than as an absolute variance.
+            It keeps ``D`` positive definite and the Woodbury inverse well
+            conditioned. The floor is relative so that it transforms correctly
+            under ``Y -> sY``, where the true ``D`` scales as ``s^2``; an
+            absolute floor would bind on every entry once ``Y`` is small enough.
+            With the default ``1e-8`` and residuals of variance ~2, the
+            effective floor is ~2e-8.
         cg_maxit: Iteration cap for the conjugate-gradient solve in the beta step.
         cg_tol: Relative residual tolerance for that solve.
         scale_correct: Apply the guarded MLE scale correction to ``Sigma`` each
@@ -79,13 +89,18 @@ def als_gls(
 
     Returns:
         B_list, F, D, mem_MB_est, info: ``info`` includes ``p_list``, ``cg``
-        (last sweep), ``nll_trace`` (post-Σ, non-increasing),
+        (last sweep), ``nll_trace`` (post-Σ; equals ``nll_per_row`` at the
+        returned parameters, and non-increasing when ``lam_F`` is 0),
+        ``obj_trace`` (the penalised objective ``NLL + lam_F/2 ||F||^2`` that the
+        line search descends, non-increasing by construction),
         ``nll_sigma_trace`` (alias of ``nll_trace``), ``nll_beta_trace``
         (post-β baseline per sweep), ``accept_t`` (accepted backtracking
         step sizes), and ``scale_used`` (accepted scale factors, 1.0 when
         not applied).
 
     Raises:
+        ValueError: If an argument is outside its domain, if ``Xs`` or ``Y``
+            holds a non-finite entry, or if their shapes disagree.
         np.linalg.LinAlgError: If a Cholesky factorisation of the Woodbury
             core fails, which means the current Sigma is not positive definite.
     """
@@ -96,6 +111,22 @@ def als_gls(
     _validate_convergence_params(
         sweeps=sweeps, rel_tol=rel_tol, cg_maxit=cg_maxit, cg_tol=cg_tol
     )
+    # d_floor <= 0 is not a weaker floor, it is a broken one: D can then reach
+    # zero or go negative, while woodbury_chol and nll_per_row clip D at 1e-12
+    # internally. The returned (F, D) would describe a different -- and not
+    # positive definite -- Sigma from the one every reported number was computed
+    # under, and Sigma_jj = ||F_j||^2 + D_j could come out negative in
+    # compute_prediction_variance.
+    d_floor = _validate_positive_float(
+        d_floor,
+        "d_floor",
+        hint="Try d_floor=1e-8 (a fraction of the residual variance).",
+    )
+    scale_floor = _validate_positive_float(
+        scale_floor, "scale_floor", hint="Try scale_floor=1e-8."
+    )
+    if not isinstance(scale_correct, bool):
+        raise ValueError(f"scale_correct must be a bool, got {scale_correct!r}")
     N, K = Y.shape
 
     p_list = [X.shape[1] for X in Xs]
@@ -170,7 +201,9 @@ def als_gls(
 
     # Starting NLL (explicit baseline before any sweep)
     nll_prev = float(nll_per_row(R, F, D))
+    obj_prev = nll_prev + 0.5 * lam_F * float(np.sum(F**2))
     nll_trace.append(nll_prev)
+    obj_trace = [obj_prev]
 
     # ----------------------------
     # Main ALS loop
@@ -216,14 +249,14 @@ def als_gls(
         R = Y - XB_from_Blist(Xs, B)
 
         # Baseline NLL for this sweep *after* β-step (the per-sweep baseline)
-        base_nll = float(nll_per_row(R, F, D))
-        nll_beta_trace.append(base_nll)
+        base_nll = float(nll_per_row(R, F, D)) + 0.5 * lam_F * float(np.sum(F**2))
+        nll_beta_trace.append(base_nll - 0.5 * lam_F * float(np.sum(F**2)))
 
         # If β worsened NLL, revert to previous B (ensures non-increase vs prior Σ)
-        if base_nll > nll_prev + 1e-12:
+        if base_nll > obj_prev + 1e-12:
             B = B_prev
             R = Y - XB_from_Blist(Xs, B)
-            base_nll = nll_prev  # true baseline for this sweep
+            base_nll = obj_prev  # true baseline for this sweep
 
         # --- Gradient-based F update
         # Compute gradient of NLL w.r.t. F
@@ -254,10 +287,19 @@ def als_gls(
         def D_mle(F_try, diag_S=diag_S):
             return np.maximum(diag_S - np.sum(F_try**2, axis=1), d_floor_eff)
 
+        # The objective the F-step actually descends. grad_F_nll adds lam_F * F
+        # to the gradient, i.e. the gradient of (lam_F/2)||F||^2, so the search
+        # direction belongs to this penalised objective and not to the bare NLL.
+        # Testing acceptance on the bare NLL instead meant the iteration
+        # descended one function while being judged on another, and could stop
+        # at a point stationary for neither.
+        def penalty(F_try):
+            return 0.5 * lam_F * float(np.sum(F_try**2))
+
         # Guarded scale correction helper (applied to a candidate F,D)
         def try_with_scale(F_try, D_try, R=R):
-            """Return (F_out, D_out, nll_out, scale_used)."""
-            nll0 = float(nll_per_row(R, F_try, D_try))
+            """Return (F_out, D_out, obj_out, scale_used)."""
+            nll0 = float(nll_per_row(R, F_try, D_try)) + penalty(F_try)
             if not scale_correct:
                 return F_try, D_try, nll0, 1.0
 
@@ -272,7 +314,7 @@ def als_gls(
             sqrt_c = np.sqrt(c_star)
             F_sc = F_try * sqrt_c
             D_sc = D_try * c_star
-            nll_sc = float(nll_per_row(R, F_sc, D_sc))
+            nll_sc = float(nll_per_row(R, F_sc, D_sc)) + penalty(F_sc)
 
             if nll_sc <= nll0 + 1e-12:
                 return F_sc, D_sc, nll_sc, c_star
@@ -290,36 +332,116 @@ def als_gls(
         # allowed to run to convergence: a ladder truncated at a fixed t_min
         # rejects every candidate whenever the initial step overshoots, which
         # silently freezes the F-step instead of finding a descent step.
-        t = t0
-        for _ in range(_MAX_BACKTRACK):
-            if t == 0.0:
+        #
+        # Two ladders, tried in order. The first is the closed-form MLE D at
+        # each trial F, which is the good step whenever it is admissible.
+        #
+        # It is not, on its own, a continuation of the incumbent: the guarded
+        # scale correction leaves D off the D_mle(F) manifold, so this ladder's
+        # t -> 0 limit is (F, D_mle(F)) rather than (F, D). Once the correction
+        # has moved D far enough that this limit is worse than the incumbent,
+        # every candidate is rejected however small the step, and F is frozen
+        # for the rest of the run -- the NLL then sits nats/row above what the
+        # same objective reaches from the same starting point, while the trace
+        # looks converged and further sweeps are exact no-ops.
+        #
+        # The second ladder holds D at the incumbent, so (F + t*dF, D_old) does
+        # tend to the incumbent as t -> 0 and a small enough step along a
+        # descent direction must improve. It runs only when the first ladder
+        # accepted nothing, which keeps the good case bit-for-bit unchanged
+        # rather than letting a weak large-t candidate preempt the halving
+        # that would have found a better one.
+        def D_keep(_F_try, D_old=D_old):
+            return D_old
+
+        for D_of in (D_mle, D_keep):
+            t = t0
+            for _ in range(_MAX_BACKTRACK):
+                if t == 0.0:
+                    break
+                F_try = F_old + t * dF
+                F_acc, D_acc, nll_acc, sc_used = try_with_scale(F_try, D_of(F_try))
+                # Accept only if we beat the per-sweep baseline
+                if nll_acc < best_nll - 1e-12:
+                    best_nll = nll_acc
+                    best_F, best_D = F_acc, D_acc
+                    accepted_t = t
+                    used_scale = sc_used
+                    break  # first improving step is fine (monotone)
+                t *= 0.5
+            if accepted_t > 0.0:
                 break
-            F_try = F_old + t * dF
-            D_try = D_mle(F_try)
-            F_acc, D_acc, nll_acc, sc_used = try_with_scale(F_try, D_try)
-            # Accept only if we beat the per-sweep baseline
-            if nll_acc < best_nll - 1e-12:
-                best_nll = nll_acc
-                best_F, best_D = F_acc, D_acc
-                accepted_t = t
-                used_scale = sc_used
-                break  # first improving step is fine (monotone)
-            t *= 0.5
 
         # Accept (or keep old F,D if no improvement)
         F, D = best_F, best_D
-        nll_curr = best_nll
+        obj_curr = best_nll
+        # The trace reports the likelihood itself, so nll_trace[-1] always equals
+        # nll_per_row at the returned parameters; obj_trace reports the penalised
+        # objective that the line search actually descends. They coincide when
+        # lam_F is 0, and only the latter is guaranteed non-increasing.
+        nll_curr = float(nll_per_row(R, F, D))
         accept_t_trace.append(accepted_t)
         scale_used_trace.append(float(used_scale))
 
-        # Append post-Σ NLL (non-increasing by construction)
+        # Append post-Σ NLL, and the objective that is non-increasing by construction
         nll_trace.append(nll_curr)
+        obj_trace.append(obj_curr)
 
-        # Convergence: stop if relative improvement w.r.t previous post-Σ NLL is tiny
-        rel_impr = (nll_prev - nll_curr) / max(1.0, abs(nll_prev))
+        # Convergence: stop if the relative improvement in the objective is tiny
+        rel_impr = (obj_prev - obj_curr) / max(1.0, abs(obj_prev))
         nll_prev = nll_curr
+        obj_prev = obj_curr
         if rel_impr < rel_tol:
             break
+
+    # Final beta refresh at the final Sigma.
+    #
+    # The sweep order is beta-then-Sigma, so on exit beta is the GLS solution at
+    # the Sigma of the *previous* sweep, not the Sigma being returned. Callers
+    # are entitled to assume the two agree: compute_XtSigmaInvX gives
+    # (X' Sigma^-1 X)^-1 as the variance of beta, which is the right variance
+    # only when beta is the GLS estimator at that Sigma. One more CG solve at
+    # the final (F, D) makes the returned pair mutually consistent. Minimising
+    # over beta at fixed Sigma cannot raise the NLL, and the same revert guard
+    # as in the sweep keeps the trace non-increasing if CG lands short.
+    if sweeps > 0:
+        Dinv, C_chol = woodbury_chol(F, D)
+        diag_sinv = siginv_diag(F, Dinv, C_chol)
+        Mpre_diag = (
+            np.concatenate(
+                [diag_sinv[j] * np.sum(X * X, axis=0) for j, X in enumerate(Xs)],
+                axis=0,
+            )
+            + lam_B
+        )
+
+        def M_pre_final(v, Mpre_diag=Mpre_diag):
+            return v / np.maximum(Mpre_diag, 1e-8)
+
+        def A_mv_final(bvec, F=F, D=D, Dinv=Dinv, C_chol=C_chol):
+            M = XB_from_Blist(Xs, unstack_B_vec(bvec, p_list))
+            S = apply_siginv_to_matrix(M, F, D, Dinv=Dinv, C_chol=C_chol)
+            out = np.concatenate(
+                [Xs[j].T @ S[:, [j]] for j in range(K)], axis=0
+            ).ravel()
+            return out + lam_B * bvec
+
+        S_y = apply_siginv_to_matrix(Y, F, D, Dinv=Dinv, C_chol=C_chol)
+        rhs = np.concatenate([Xs[j].T @ S_y[:, [j]] for j in range(K)], axis=0).ravel()
+        bvec, cg_info = cg_solve(
+            A_mv_final,
+            rhs,
+            x0=stack_B_list(B),
+            maxit=cg_maxit,
+            tol=cg_tol,
+            M_pre=M_pre_final,
+        )
+        B_ref = unstack_B_vec(bvec, p_list)
+        nll_ref = float(nll_per_row(Y - XB_from_Blist(Xs, B_ref), F, D))
+        if nll_ref <= nll_trace[-1] + 1e-12:
+            B = B_ref
+            nll_trace[-1] = nll_ref
+            obj_trace[-1] = nll_ref + 0.5 * lam_F * float(np.sum(F**2))
 
     # Memory estimate: F (Kxk) + D (K) + U (Nxk) doubles
     mem_mb_est = (K * F.shape[1] + K + N * F.shape[1]) * 8 / 1e6
@@ -329,6 +451,7 @@ def als_gls(
         "cg": cg_info,
         "nll_trace": nll_trace,  # post-Σ
         "nll_sigma_trace": nll_trace,  # alias for clarity
+        "obj_trace": obj_trace,  # penalised objective; the monotone one
         "nll_beta_trace": nll_beta_trace,  # post-β (per-sweep baseline)
         "accept_t": accept_t_trace,  # accepted t (0.0 means kept previous F,D)
         "scale_used": scale_used_trace,  # accepted c* (1.0 means no scale applied)
