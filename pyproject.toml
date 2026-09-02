@@ -45,6 +45,9 @@ test = [
   "simcheck @ git+https://github.com/finite-sample/simcheck",
   "pytest>=8",
   "pytest-cov>=6",
+  # An independent implementation of the same covariance estimator, used as an
+  # external check on the Sigma step. Test-only; not needed to use alsgls.
+  "scikit-learn>=1.4",
 ]
 docs = [
   "sphinx>=8",

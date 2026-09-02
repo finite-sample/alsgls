@@ -114,13 +114,15 @@ comparison behind that decision.
 - **Rank heuristic** – The estimator uses `min(8, ceil(K / 10))` when
   `rank="auto"`; raise the rank if residual correlations persist, or lower it
   to avoid overfitting tiny samples.
-- **Ridge parameters** – `lam_F` and `lam_B` default to `1e-3`. Increase
+- **Ridge parameter** – `lam_B` defaults to `1e-3`, applied relative to the
+  residual variance scale so the fit does not depend on the units of `Y`. Increase
   them if the CG solver reports many iterations or the NLL trace stagnates.
 - **Diagonal floor** – `d_floor` keeps the diagonal noise positive. Tighten it
   (e.g. `1e-6`) in ill-conditioned problems to prevent breakdowns.
 - **Stopping criteria** – ALS stops when the relative improvement in the NLL is
   below `rel_tol` (default `1e-6`) or when `max_sweeps` is reached. Inspect
-  `info_["nll_trace"]` and `info_["accept_t"]` to diagnose plateaus.
+  `info_["nll_trace"]` to see the likelihood per sweep, and
+  `info_["sigma_iters"]` for the inner alternation counts.
 
 ## Next Steps
 

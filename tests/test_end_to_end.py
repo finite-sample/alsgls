@@ -24,12 +24,10 @@ def test_nll_decreases_on_sim():
         Xs,
         Y,
         k=3,
-        lam_F=1e-3,
         lam_B=1e-3,
         sweeps=20,
         cg_maxit=4000,
         cg_tol=1e-8,
-        scale_correct=True,
     )
     tr = list(map(float, info.get("nll_trace", [])))
     assert len(tr) >= 2

@@ -9,6 +9,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 from scipy import stats
+from scipy.optimize import minimize
 
 from alsgls import ALSGLS, ALSGLSSystem, simulate_sur
 from alsgls._validation import _sanitize_regularization_params
@@ -17,7 +18,6 @@ from alsgls.metrics import nll_per_row
 from alsgls.ops import (
     XB_from_Blist,
     compute_prediction_variance,
-    grad_F_nll,
     woodbury_chol,
 )
 
@@ -41,8 +41,8 @@ class TestRegularizationIsNotOverridden:
     def test_zero_ridge_changes_the_fit(self):
         """lam=0 must not produce the same numbers as the default lam=1e-3."""
         Xs, Y, _, _ = simulate_sur(N_tr=80, N_te=5, K=5, p=3, k=2, seed=3)
-        B0, _, _, _, _ = als_gls(Xs, Y, k=2, sweeps=1, lam_F=0.0, lam_B=0.0)
-        Bd, _, _, _, _ = als_gls(Xs, Y, k=2, sweeps=1, lam_F=1e-3, lam_B=1e-3)
+        B0, _, _, _, _ = als_gls(Xs, Y, k=2, sweeps=1, lam_B=0.0)
+        Bd, _, _, _, _ = als_gls(Xs, Y, k=2, sweeps=1, lam_B=1e-3)
         delta = max(np.abs(a - b).max() for a, b in zip(B0, Bd, strict=True))
         assert delta > 0.0, "lam=0 was silently replaced by the default"
 
@@ -51,7 +51,7 @@ class TestRegularizationIsNotOverridden:
         from alsgls.ops import apply_siginv_to_matrix, compute_XtSigmaInvX
 
         Xs, Y, _, _ = simulate_sur(N_tr=80, N_te=5, K=5, p=3, k=2, seed=3)
-        B, F, D, _, _ = als_gls(Xs, Y, k=2, sweeps=20, lam_F=0.0, lam_B=0.0)
+        B, F, D, _, _ = als_gls(Xs, Y, k=2, sweeps=20, lam_B=0.0)
 
         A = compute_XtSigmaInvX(Xs, F, D, lam_B=0.0)
         S_y = apply_siginv_to_matrix(Y, F, D, C_chol=woodbury_chol(F, D)[1])
@@ -66,91 +66,71 @@ class TestRegularizationIsNotOverridden:
         )
 
 
-class TestFStepLineSearch:
-    """docs/source/formal_methods.md Sec. 5-6.
+class TestSigmaStepReachesTheOptimum:
+    """The Sigma step is the closed-form factor-analysis update.
 
-    "The F-step uses gradient descent with backtracking line search";
-    "Theorem 2 (Convergence to Stationary Point)".
-
-    A backtracking line search shrinks the step until it finds an improving
-    one. It may not abandon the search while a descent step is still
-    available, and its first trial step must be calibrated to the problem
-    rather than hard-coded to 1.
+    It replaced a steepest-descent step with a backtracking line search that
+    stopped improving F after about two sweeps and left the fit nats/row short
+    of the likelihood the same objective reaches from the same starting point.
+    There is no step size to test any more, so what is tested is the thing the
+    step size existed to achieve: that the answer is the optimum.
     """
 
     @staticmethod
     def _small_scale_problem():
-        # Magnitude used by examples/real_data_fama_french.py, which converts
-        # percentage returns to decimals (Y ~ 1e-2).
-        Xs, Y, _, _ = simulate_sur(N_tr=200, N_te=10, K=10, p=3, k=3, seed=5)
-        return Xs, Y / 100.0
+        Xs, Y, _, _ = simulate_sur(N_tr=200, N_te=5, K=12, p=3, k=3, seed=4)
+        return Xs, Y * 1e-4
 
-    def test_f_step_is_updated_on_small_scale_data(self):
-        """F must actually move; accept_t must not be identically zero."""
+    def test_sigma_step_moves_on_small_scale_data(self):
+        """A fixed absolute step or floor would freeze the fit at this scale."""
         Xs, Y = self._small_scale_problem()
-        _, _, _, _, info = als_gls(Xs, Y, k=3, sweeps=30)
-        assert max(info["accept_t"]) > 0.0, (
-            f"line search accepted no step at any sweep: {info['accept_t']}"
-        )
+        _, F, _, _, info = als_gls(Xs, Y, k=3, sweeps=8)
+        assert np.any(F != 0.0)
+        assert info["nll_trace"][-1] < info["nll_trace"][0] - 1e-9
 
-    def test_no_improving_step_remains_along_the_descent_direction(self):
-        """The line search must not stop while a descent step still helps.
-
-        Step sizes are probed relative to the scale-calibrated reference step
-        ``t0 = ||F|| / ||grad_F||`` so that the check means the same thing at
-        every data scale.
-        """
-        Xs, Y = self._small_scale_problem()
-        B, F, D, _, _ = als_gls(Xs, Y, k=3, sweeps=30)
+    def test_nothing_is_left_on_the_table_for_an_independent_optimiser(self):
+        """L-BFGS-B on the same objective, from the returned answer, with beta
+        held fixed. The gradient step used to leave 5 to 15 nats/row here."""
+        Xs, Y, _, _ = simulate_sur(N_tr=200, N_te=5, K=20, p=3, k=4, seed=7)
+        K, k = 20, 4
+        B, F, D, _, info = als_gls(Xs, Y, k=k, sweeps=30, lam_B=0.0)
         R = Y - XB_from_Blist(Xs, B)
-        Dinv, C_chol = woodbury_chol(F, D)
-        dF = -grad_F_nll(R, F, D, Dinv, C_chol, 1e-3)
 
-        t0 = np.linalg.norm(F) / np.linalg.norm(dF)
-        diag_S = np.sum(R**2, axis=0) / R.shape[0]
-        nll_returned = float(nll_per_row(R, F, D))
+        def objective(z):
+            return nll_per_row(R, z[: K * k].reshape(K, k), np.exp(z[K * k :]))
 
-        best = nll_returned
-        t = t0
-        for _ in range(40):
-            F_try = F + t * dF
-            D_try = np.maximum(diag_S - np.sum(F_try**2, axis=1), 1e-8)
-            best = min(best, float(nll_per_row(R, F_try, D_try)))
-            t *= 0.5
-
-        assert nll_returned - best < 1e-3, (
-            f"a step along the same descent direction improves the NLL by "
-            f"{nll_returned - best:.6f} per row, so the search stopped early"
-        )
+        start = np.concatenate([F.ravel(), np.log(np.maximum(D, 1e-12))])
+        best = minimize(
+            objective, start, method="L-BFGS-B", options={"maxiter": 20000}
+        ).fun
+        assert info["nll_trace"][-1] - best < 0.05
 
     @pytest.mark.parametrize("s", [1e-2, 1e2])
-    def test_unpenalised_fit_is_scale_equivariant(self, s):
-        """With no ridge, rescaling the data must rescale the fit exactly.
+    def test_fit_is_scale_equivariant_at_the_default_penalty(self, s):
+        """Under Y -> sY the fit must satisfy B -> sB, F -> sF, D -> s^2 D.
 
-        The Gaussian NLL satisfies l(sY; sB, sF, s^2 D) = l(Y; B, F, D)
-        + K log s, so an unpenalised solver run on ``sY`` must trace the
-        rescaled iterates of the run on ``Y``.  (The ridge terms are absolute
-        and therefore scale-dependent by construction, which is why this is
-        asserted at lam=0.)
+        This used to hold only at lam_B = 0, because an absolute ridge does not
+        transform with the data. lam_B is now relative to the residual variance
+        scale, so equivariance holds at the shipped default.
 
-        ``d_floor`` used to be an absolute variance and had to be scaled by
-        s**2 here to compensate.  It is now taken relative to the residual
-        variance, so the caller no longer scales it -- passing a scaled value
-        would floor the fit twice over.  ``scale_floor`` bounds a ratio of
-        quadratic forms, which is already scale free, so it is left alone.
+        The tolerance is 1e-3 rather than machine precision because the inner
+        alternation stops on a relative likelihood decrease and takes a slightly
+        different number of iterations at different scales (60/45/13/3 against
+        55/41/12/2 at s = 1e-2), so the two fits stop at marginally different
+        points on the same trajectory. The scaling itself is exact: var_ref and
+        lam_B_eff both transform to 1.000000 of their predicted ratios.
         """
-        Xs, Y, _, _ = simulate_sur(N_tr=120, N_te=10, K=8, p=3, k=2, seed=1)
-        kw = {"k": 2, "sweeps": 30, "lam_F": 0.0, "lam_B": 0.0}
-        B1, F1, D1, _, _ = als_gls(Xs, Y, **kw)
-        _, _, _, _, infos = als_gls(Xs, s * Y, **kw)
+        Xs, Y, _, _ = simulate_sur(N_tr=200, N_te=5, K=12, p=3, k=3, seed=6)
+        B1, F1, D1, _, _ = als_gls(Xs, Y, k=3, sweeps=20)
+        B2, F2, D2, _, _ = als_gls(Xs, s * Y, k=3, sweeps=20)
 
-        R = s * Y - XB_from_Blist(Xs, [s * b for b in B1])
-        ref = float(nll_per_row(R, s * F1, s * s * D1))
-        got = infos["nll_trace"][-1]
-        assert got == pytest.approx(ref, abs=1e-5), (
-            f"at scale s={s} the solver reaches NLL {got:.8f} but the exactly "
-            f"rescaled unit-scale fit gives {ref:.8f}"
-        )
+        b1 = np.concatenate([b.ravel() for b in B1])
+        b2 = np.concatenate([b.ravel() for b in B2]) / s
+        assert np.abs(b2 - b1).max() / max(np.abs(b1).max(), 1e-30) < 1e-3
+        assert np.abs(D2 / s**2 - D1).max() / np.abs(D1).max() < 1e-3
+        # F is identified only up to rotation, so compare F F^T.
+        g1, g2 = F1 @ F1.T, (F2 @ F2.T) / s**2
+        assert np.abs(g2 - g1).max() / np.abs(g1).max() < 1e-3
 
 
 class TestResidualDegreesOfFreedom:
@@ -251,10 +231,10 @@ def test_zero_ridge_on_a_singular_design_explains_itself():
     y = np.c_[np.linspace(0, 1, n), np.linspace(1, 0, n)]
 
     with pytest.raises(np.linalg.LinAlgError, match="lam_B is 0"):
-        als_gls([x, x], y, k=1, lam_B=0.0, lam_F=0.0, sweeps=1)
+        als_gls([x, x], y, k=1, lam_B=0.0, sweeps=1)
 
     # A positive ridge still solves it.
-    als_gls([x, x], y, k=1, lam_B=1e-3, lam_F=1e-3, sweeps=1)
+    als_gls([x, x], y, k=1, lam_B=1e-3, sweeps=1)
 
 
 class TestVarianceFloorIsRelative:

@@ -17,9 +17,7 @@ def test_trace_is_nonincreasing_after_sweep_fix():
         + rng.standard_normal((N, K)) * np.sqrt(D_true)
     )
 
-    _, _, _, _, info = als_gls(
-        Xs, Y, k=3, sweeps=15, cg_maxit=4000, cg_tol=1e-8, scale_correct=True
-    )
+    _, _, _, _, info = als_gls(Xs, Y, k=3, sweeps=15, cg_maxit=4000, cg_tol=1e-8)
     tr = list(map(float, info["nll_trace"]))
     # non-increasing up to 1e-10 jitter
     for t in range(1, len(tr)):
