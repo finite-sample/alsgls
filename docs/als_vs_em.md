@@ -3,6 +3,14 @@
 This section compares the Alternating Least Squares (ALS) and Expectation-Maximization (EM) 
 approaches for low-rank+diagonal GLS estimation.
 
+**`em_gls()` is no longer part of the package.** It was removed in 2.0, and
+the comparison below is why: both algorithms optimise the same likelihood and
+give statistically indistinguishable estimates, while EM's cost grows with the
+square of the number of equations. The mathematics and the measurements still
+stand; only the shipped implementation is gone, and the EM code the numbers
+came from remains in `als_sim/lowrank_gls/`, which is exploratory and not
+installed.
+
 ## Mathematical Background
 
 Both algorithms solve the same statistical problem: estimating regression coefficients β 
@@ -60,7 +68,7 @@ For K=100 equations and k=5 factors:
 ## Computational Comparison
 
 ```python
-from alsgls import simulate_sur, als_gls, em_gls
+from alsgls import simulate_sur, als_gls
 import time
 
 # Generate test problem
@@ -74,14 +82,7 @@ t0 = time.time()
 B_als, F_als, D_als, mem_als, info_als = als_gls(Xs_tr, Y_tr, k=k, sweeps=8)
 time_als = time.time() - t0
 
-# Time EM
-t0 = time.time()
-B_em, F_em, D_em, mem_em, info_em = em_gls(Xs_tr, Y_tr, k=k, iters=30)
-time_em = time.time() - t0
-
 print(f"ALS: {time_als:.2f}s, {mem_als:.1f}MB")
-print(f"EM:  {time_em:.2f}s, {mem_em:.1f}MB")
-print(f"Memory ratio: {mem_em / mem_als:.1f}×")
 ```
 
 ## Statistical Equivalence
@@ -89,27 +90,10 @@ print(f"Memory ratio: {mem_em / mem_als:.1f}×")
 Despite different computational approaches, both algorithms optimize the same 
 likelihood and produce statistically indistinguishable estimates:
 
-```python
-from alsgls import XB_from_Blist, mse
-import numpy as np
-
-# Compare predictions
-Y_pred_als = XB_from_Blist(Xs_te, B_als)
-Y_pred_em = XB_from_Blist(Xs_te, B_em)
-
-# MSE should be nearly identical
-mse_als = mse(Y_te, Y_pred_als)
-mse_em = mse(Y_te, Y_pred_em)
-
-print(f"ALS MSE: {mse_als:.6f}")
-print(f"EM MSE:  {mse_em:.6f}")
-print(f"Difference: {abs(mse_als - mse_em):.2e}")
-
-# Factor structures should be equivalent (up to rotation)
-cov_als = F_als @ F_als.T + np.diag(D_als)
-cov_em = F_em @ F_em.T + np.diag(D_em)
-print(f"Covariance difference: {np.linalg.norm(cov_als - cov_em):.2e}")
-```
+Held-out MSE agreed to within numerical noise, and the implied covariances
+`FFᵀ + diag(D)` matched up to rotation. That equivalence is the reason the
+package ships only ALS: there was nothing statistical to lose by dropping the
+slower algorithm.
 
 ## When to Use Each
 
@@ -130,6 +114,6 @@ print(f"Covariance difference: {np.linalg.norm(cov_als - cov_em):.2e}")
 The package provides both for comparison:
 
 - `als_gls()`: Memory-efficient ALS implementation
-- `em_gls()`: Baseline EM implementation  
+- `em_gls()`: the baseline EM implementation these measurements used, removed in 2.0 and kept only in `als_sim/lowrank_gls/`  
 
 Both use the same convergence criteria and regularization options for fair comparison.
