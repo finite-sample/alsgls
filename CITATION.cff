@@ -5,9 +5,9 @@ authors:
   - family-names: "Sood"
     given-names: "Gaurav"
     email: "contact@gsood.com"
-title: "alsgls: Lightweight low-rank+diag GLS/SUR via ALS with EM baseline"
-version: 1.2.0
-date-released: 2024-01-01
+title: "alsgls: Lightweight low-rank-plus-diagonal GLS/SUR estimation"
+version: 2.0.0
+date-released: 2026-09-02
 url: "https://github.com/finite-sample/alsgls"
 repository-code: "https://github.com/finite-sample/alsgls"
 license: MIT

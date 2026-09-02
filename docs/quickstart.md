@@ -104,7 +104,7 @@ print(f"Sweeps used: {len(als.info_['nll_trace']) - 1}")
 ```
 
 Earlier versions of this example also fitted a dense EM baseline through
-`em_gls`. That function was removed in 2.0: it optimises the same likelihood
+`em_gls`. That function was removed in 1.0: it optimises the same likelihood
 and produces statistically indistinguishable estimates, at a cost growing with
 the square of the number of equations. See [ALS vs EM](als_vs_em.md) for the
 comparison behind that decision.
