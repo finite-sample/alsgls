@@ -216,7 +216,9 @@ Combined, each sweep satisfies $\ell^{(t+1)} \leq \ell^{(t)}$. □
 
 ### Theorem 2 (Convergence to Stationary Point)
 
-**Statement:** Under regularity conditions, the sequence $(\beta^{(t)}, F^{(t)}, D^{(t)})$ converges to a stationary point of $\ell$.
+**Statement:** Under regularity conditions, the sequence $(\beta^{(t)}, F^{(t)}, D^{(t)})$ converges to a stationary point of the objective the iteration descends, $J = \ell + \tfrac{\lambda_F}{2}\lVert F\rVert_F^2$. With $\lambda_F = 0$ that objective is $\ell$ itself; with the default $\lambda_F = 10^{-3}$ the limit is a stationary point of $J$ and not of $\ell$.
+
+Two caveats worth stating plainly. The ridge penalty is an absolute one, so the fitted $F$ is not invariant to the units of $Y$: under $Y \to sY$ the likelihood gradient scales as $1/s$ while $\lambda_F F$ scales as $s$, so the penalty dominates by a factor of $s^2$. And convergence here is asymptotic in the number of sweeps; the shipped defaults (8 for `als_gls`, 12 for `ALSGLS`) do not reach it on moderately sized problems.
 
 **Proof sketch:**
 1. NLL is bounded below (by $-\infty$ from log-det, regularized to prevent this)
