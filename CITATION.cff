@@ -6,7 +6,7 @@ authors:
     given-names: "Gaurav"
     email: "contact@gsood.com"
 title: "alsgls: Lightweight low-rank-plus-diagonal GLS/SUR estimation"
-version: 2.1.0
+version: 2.2.0
 date-released: 2026-09-03
 url: "https://github.com/finite-sample/alsgls"
 repository-code: "https://github.com/finite-sample/alsgls"

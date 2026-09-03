@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [2.1.0] - 2026-09-03
+## [2.2.0] - 2026-09-03
 
 ### Added
 
@@ -38,6 +38,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Cost: 5 ms at K = 20, 89 ms at K = 60, 0.5 s at K = 100, 5 s at K = 200.
 - `alsgls.kackar_harville` module; `GramBlocks` / `assemble_blocks` in
   `alsgls.ops`, the block assembly factored out of `compute_XtSigmaInvX`.
+
+## [2.1.0] - 2026-09-03
 
 ### Added
 
