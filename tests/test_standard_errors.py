@@ -704,7 +704,7 @@ def _mc_studies(n, reps=MC_REPS, seed=0):
         seed: Seed for the replicate stream.
 
     Returns:
-        dict: ``{"alsgls": {index: MonteCarloResult}, "ols": {...}}``.
+        dict: ``{"plugin": {index: MonteCarloResult}, "kh": {...}, "ols": {...}}``.
     """
     Xs, B, F, D, truth = _mc_truth(n)
     n_params = MC_K * MC_P
@@ -715,7 +715,7 @@ def _mc_studies(n, reps=MC_REPS, seed=0):
             field: np.empty((reps, n_params))
             for field in ("estimate", "error", "lower", "upper")
         }
-        for tag in ("alsgls", "ols")
+        for tag in ("plugin", "kh", "ols")
     }
     for tag in recorded:
         recorded[tag]["rejected"] = np.empty((reps, n_params), dtype=bool)
@@ -728,13 +728,21 @@ def _mc_studies(n, reps=MC_REPS, seed=0):
         # lam_B=0: a ridge penalty biases the coefficients on purpose and is not
         # reflected in cov_params either, which would confound the two defects.
         fitted = ALSGLSSystem(system, rank=MC_RANK, lam_B=0.0, max_sweeps=12).fit()
-        interval = fitted.conf_int(alpha=0.05)
-        store = recorded["alsgls"]
-        store["estimate"][i] = fitted.params
-        store["error"][i] = fitted.bse
-        store["lower"][i] = interval[:, 0]
-        store["upper"][i] = interval[:, 1]
-        store["rejected"][i] = fitted.pvalues < 0.05
+        # Both covariance methods on the same fit: "kh" is what bse reports,
+        # "plugin" is what linearmodels, systemfit and Stata would.
+        quantile = stats.t.ppf(0.975, fitted.df_resid)
+        for tag in ("plugin", "kh"):
+            se = np.sqrt(np.maximum(np.diag(fitted.covariance(tag)), 0.0))
+            store = recorded[tag]
+            store["estimate"][i] = fitted.params
+            store["error"][i] = se
+            store["lower"][i] = fitted.params - quantile * se
+            store["upper"][i] = fitted.params + quantile * se
+            with np.errstate(divide="ignore", invalid="ignore"):
+                tval = np.where(se > 0, fitted.params / se, 0.0)
+            store["rejected"][i] = (
+                2.0 * stats.t.sf(np.abs(tval), fitted.df_resid) < 0.05
+            )
 
         beta, error, pvalues = _ols_by_equation(Xs, Y)
         store = recorded["ols"]
@@ -834,7 +842,7 @@ def test_the_standard_errors_are_caught_understating_the_spread(index):
     Args:
         index: Which coefficient to track.
     """
-    study = _mc_studies(MC_SMALL_N)["alsgls"][index]
+    study = _mc_studies(MC_SMALL_N)["plugin"][index]
     with pytest.raises(AssertionError, match="observed spread"):
         assert_se_calibrated(study, f"alsgls coefficient {index}")
 
@@ -848,6 +856,41 @@ def test_the_standard_errors_are_caught_understating_the_spread(index):
 
 def _mean_over(studies, indices, attr):
     return float(np.mean([getattr(studies[i], attr) for i in indices]))
+
+
+@pytest.mark.parametrize("index", MC_TRACKED)
+def test_kackar_harville_lifts_the_plug_in_at_n_20(index):
+    """The default standard error is the plug-in plus the Kackar-Harville term.
+
+    Paired on identical draws, it exceeds the plug-in for every tracked
+    coefficient: measured 0.898, 0.825, 0.908, 0.918 against 0.861, 0.793,
+    0.872, 0.882. Three of the four are inside simcheck's calibration band at
+    400 replicates; the fourth is not, and the mean, 0.885, is still short. So
+    the default is a real improvement and not yet calibration at this n, which
+    is why the bootstrap exists. What Lambda corrects is the extra spread
+    feasible GLS has over GLS at the true Sigma -- at the true (F, D) it
+    brings the ratio to 0.98, see ``test_kackar_harville`` -- and what it does
+    not correct is the bias of Phi_hat at Sigma_hat, which is most of what is
+    left.
+
+    Args:
+        index: Which coefficient to track.
+    """
+    studies = _mc_studies(MC_SMALL_N)
+    kh = studies["kh"][index]
+    plugin = studies["plugin"][index]
+    assert kh.se_ratio > plugin.se_ratio + 0.02, (plugin.se_ratio, kh.se_ratio)
+    assert kh.se_ratio < 0.95, kh.se_ratio
+
+
+def test_kackar_harville_is_still_short_on_average_at_n_20():
+    """The mean over tracked coefficients, 0.885, against 0.850 for the plug-in.
+    Recorded as a required failure so that if a change makes the default
+    calibrated here, the suite says so rather than silently certifying it."""
+    studies = _mc_studies(MC_SMALL_N)
+    kh = _mean_over(studies["kh"], MC_TRACKED, "se_ratio")
+    plugin = _mean_over(studies["plugin"], MC_TRACKED, "se_ratio")
+    assert plugin + 0.02 < kh < 0.93, (plugin, kh)
 
 
 def test_the_confidence_intervals_are_caught_under_covering():
@@ -864,7 +907,7 @@ def test_the_confidence_intervals_are_caught_under_covering():
     fail on the seed rather than on the estimator. The mean, 0.899, is not
     marginal.
     """
-    studies = _mc_studies(MC_SMALL_N)["alsgls"]
+    studies = _mc_studies(MC_SMALL_N)["plugin"]
     coverage = _mean_over(studies, MC_TRACKED, "coverage")
     low, _ = binomial_band(0.95, studies[MC_TRACKED[0]].reps)
     assert coverage < low, f"mean coverage {coverage:.3f} against a floor of {low:.3f}"
@@ -878,7 +921,7 @@ def test_the_p_values_are_caught_over_rejecting_a_true_null():
     0.14 against a 3-sigma ceiling of 0.083; gated on the mean, 0.111, for the
     reason given in the coverage test.
     """
-    studies = _mc_studies(MC_SMALL_N)["alsgls"]
+    studies = _mc_studies(MC_SMALL_N)["plugin"]
     size = _mean_over(studies, MC_NULLS, "rejection_rate")
     _, high = binomial_band(0.05, studies[MC_NULLS[0]].reps)
     assert size > high, f"mean size {size:.3f} against a ceiling of {high:.3f}"
@@ -901,8 +944,8 @@ def test_the_deficit_shrinks_as_the_sample_grows(index):
     Args:
         index: Which coefficient to track.
     """
-    small = _mc_studies(MC_SMALL_N)["alsgls"][index]
-    large = _mc_studies(MC_N)["alsgls"][index]
+    small = _mc_studies(MC_SMALL_N)["plugin"][index]
+    large = _mc_studies(MC_N)["plugin"][index]
 
     assert small.se_ratio < large.se_ratio, (small.se_ratio, large.se_ratio)
     assert small.coverage < large.coverage, (small.coverage, large.coverage)
@@ -913,35 +956,25 @@ def test_the_deficit_shrinks_as_the_sample_grows(index):
     assert large.coverage - small.coverage > 0.015, (small.coverage, large.coverage)
 
 
-def test_the_deficit_survives_at_the_sample_size_this_repository_fixtures_at():
-    """At n = 200 the shortfall stops being obvious and starts being silent.
+def test_at_n_200_every_method_is_calibrated_within_noise():
+    """At n = 200, the size every other fixture in this repository uses, the
+    shortfall is gone on this fixture.
 
-    Every other fixture in this repository uses n = 200 or less. At that size the
-    reported standard error is about 2% short and the interval covers 0.945
-    against a nominal 0.95 -- inside a 3-sigma band at 400 replicates, and it
-    takes something like 2500 replicates to resolve. Coverage is therefore
-    deliberately *not* gated here in either direction: a study this size cannot
-    honestly call it either way, and asserting either would be asserting the
-    seed.
-
-    What 400 replicates can support is the paired comparison. Both estimators see
-    the same twelve coefficients on the same draws, so the difference between
-    their se ratios is not draw noise: alsgls reports 0.979 of its own spread
-    where exact OLS reports 1.007 of its own. The gap is small, one-directional,
-    and exactly the size the diagnosis predicts once n is large enough for
-    ``F_hat`` and ``D_hat`` to be nearly pinned down.
+    Measured means over the tracked coefficients, all on the same 400 draws:
+    plug-in 0.994, Kackar-Harville 0.996, exact OLS 0.996. The nuisance burden
+    r / (nK) is 8 / 800 = 0.01 here, and the O(r/n) cost is below what 400
+    replicates can resolve. An earlier version of this test asserted that the
+    plug-in's deficit *survives* at n = 200; that was measured on a rank-2
+    fixture that K = 4 does not identify, where Sigma_hat could not be pinned
+    down at any n. Gated on the ordering and on everything sitting near 1.
     """
-    alsgls = _mc_studies(MC_N)["alsgls"]
-    ols = _mc_studies(MC_N)["ols"]
-
-    alsgls_ratio = float(np.mean([study.se_ratio for study in alsgls.values()]))
-    ols_ratio = float(np.mean([study.se_ratio for study in ols.values()]))
-    assert alsgls_ratio < ols_ratio, (alsgls_ratio, ols_ratio)
-
-    # Still short by more than a percent, and the exact estimator is not. A gap
-    # of 0.027 over twelve paired coefficients is far outside what re-drawing a
-    # handful of replicates could move.
-    assert ols_ratio - alsgls_ratio > 0.01, (alsgls_ratio, ols_ratio)
+    studies = _mc_studies(MC_N)
+    plugin = _mean_over(studies["plugin"], MC_TRACKED, "se_ratio")
+    kh = _mean_over(studies["kh"], MC_TRACKED, "se_ratio")
+    ols = _mean_over(studies["ols"], MC_TRACKED, "se_ratio")
+    assert kh >= plugin, (plugin, kh)
+    for label, ratio in (("plugin", plugin), ("kh", kh), ("ols", ols)):
+        assert 0.97 < ratio < 1.03, (label, ratio)
 
 
 # --------------------------------------------------------------------------
