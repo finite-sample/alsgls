@@ -296,7 +296,113 @@ $$
 \sqrt{N}(\hat{\beta} - \beta^0) \xrightarrow{d} \mathcal{N}(0, V)
 $$
 
-where $V$ is the asymptotic variance matrix.
+where $V$ is the asymptotic variance matrix, and feasible GLS with a
+consistently estimated $\hat\Sigma$ has the same first-order limit as GLS at
+the true $\Sigma$.
+
+### What the reported standard errors are, and are not
+
+`cov_params` reports
+
+$$
+\widehat{\operatorname{Var}}(\hat\beta) = \left(X^T \hat\Sigma_c^{-1} X + \lambda I\right)^{-1},
+\qquad
+\hat\Sigma_c = \operatorname{diag}(\sqrt c)\,\hat\Sigma\,\operatorname{diag}(\sqrt c),
+\quad c_j = \frac{N}{N - p_j},
+$$
+
+the variance of a GLS estimator whose covariance is *known*, evaluated at the
+estimated one after the degrees-of-freedom rescale every SUR package applies
+(`linearmodels` `debiased=True`, R `systemfit` `"geomean"`, Stata `sureg, dfk`).
+Since $\hat\Sigma = \hat F\hat F^T + \operatorname{diag}(\hat D)$, the rescale
+is applied as $\hat F \to \operatorname{diag}(\sqrt c)\hat F$,
+$\hat D \to c \odot \hat D$, which preserves the structure exactly.
+
+This understates the finite-sample variance, and the shortfall has two parts.
+Freedman and Peters (1984, *JASA* 79, 97–106, Theorem 1) order them as
+
+$$
+\operatorname{Var}(\hat\beta_{\text{FGLS}}) \;>\; \operatorname{Var}(\hat\beta_{\text{GLS}}) \;>\; E\!\left[\widehat{\operatorname{Var}}(\hat\beta)\right].
+$$
+
+The right inequality is Jensen's: $(X^T\Sigma^{-1}X)^{-1}$ is concave in
+$\Sigma$, so a noisy $\hat\Sigma$ biases the plug-in down even when unbiased.
+The left is the extra spread feasible GLS carries over infeasible GLS. No
+formula evaluated at a single $\hat\Sigma$ can see the left inequality.
+
+**Measured**, on a 4-equation, 3-regressor, rank-1 system, 300 replicates,
+$\text{se ratio} = $ mean reported SE / actual spread of $\hat\beta$:
+
+| | mean SE | sd$(\hat\beta)$ | se ratio |
+|---|---|---|---|
+| plug-in at $\hat\Sigma$ | 0.144 | 0.211 | 0.69 |
+| oracle GLS at the true $\Sigma$ | 0.186 | 0.182 | 1.03 |
+| $\hat\beta_{\text{FGLS}}$, SE at the true $\Sigma$ | 0.186 | 0.211 | 0.88 |
+
+The oracle is calibrated, so the formula is right and its inputs are not.
+The third row is the ceiling on any correction that keeps $\hat\Sigma$ fixed:
+0.88 at $n = 20$, 0.92 at $n = 30$, above 0.98 from $n = 50$.
+
+The shortfall tracks the number of covariance parameters over the sample. With
+$r = Kk + K - k(k-1)/2$ and $n$ fixed at 40:
+
+| $r/(nK)$ | 0.050 | 0.069 | 0.072 | 0.094 | 0.106 | 0.144 |
+|---|---|---|---|---|---|---|
+| se ratio | 0.92 | 0.87 | 0.85 | 0.83 | 0.75 | 0.67 |
+
+which is the $O(r/n)$ nuisance-parameter cost the theory predicts, and is why
+the low-rank structure is what makes small $n$ feasible at all: an unstructured
+$\hat\Sigma$ at $K = 60$, $n = 20$ is singular.
+
+### Calibrated inference: `bootstrap()`
+
+The literature on SUR inference is unanimous that the fix is not a better
+standard error but a better *statistic* (Rilstone and Veall 1996; Fiebig and
+Kim 2000; Horowitz 2019). `bootstrap(B, method, seed)` refits $F$, $D$ and
+$\beta$ on each of $B$ resampled datasets and records the studentised
+deviation
+
+$$
+t^{(b)} = \frac{\hat\beta^{(b)} - \hat\beta}{\widehat{\text{se}}^{(b)}},
+$$
+
+with $\widehat{\text{se}}^{(b)}$ the replicate's *own* plug-in. The plug-in is
+biased the same way inside each replicate as in the sample, so the quantiles
+of $t^{(b)}$ absorb the bias, and the percentile-$t$ interval
+
+$$
+\left[\hat\beta - t^*_{1-\alpha/2}\,\widehat{\text{se}},\;
+      \hat\beta - t^*_{\alpha/2}\,\widehat{\text{se}}\right]
+$$
+
+is the calibrated object. The bootstrap standard error `bse` is reported too,
+but is itself biased down (Freedman and Peters measured 20–30%), because each
+replicate is drawn from a $\hat\Sigma$ that is too small.
+
+Three schemes, all refitting $\Sigma$: `"parametric"` draws from the fitted
+$\hat F\hat F^T + \operatorname{diag}(\hat D)$; `"wild"` multiplies each
+residual row by a Rademacher sign, which preserves the cross-equation
+structure without a distributional assumption; `"residual"` resamples whole
+residual rows. Pairs resampling is deliberately absent: at $n = 20$ a
+with-replacement draw has about 63% distinct rows, and a factor covariance
+fitted to a dozen distinct $K$-vectors is not a replicate of anything.
+
+The one analytic route that scales with $r$ is Kackar–Harville / Kenward–Roger,
+which adds the missing term $\Lambda$ to $\Phi = (X^T\Sigma^{-1}X)^{-1}$ from
+$\operatorname{Cov}(\hat\theta)$ and the derivatives of $\Sigma(\theta)$. For
+$\Sigma = FF^T + \operatorname{diag}(D)$ that is novel work: $\Sigma$ is
+quadratic in $F$ and the information is singular under rotation. It is the
+natural follow-up.
+
+### Identification
+
+The $k$-factor model spends $r = Kk + K - k(k-1)/2$ parameters on a covariance
+with $K(K+1)/2$ free entries. When $r$ exceeds that — Ledermann's bound,
+$(K-k)^2 < K + k$ — the loadings are not identified, the likelihood has a ridge
+of maxima, and any inference built on $\hat\Sigma$ is inference on a quantity
+the data cannot pin down. R's `factanal` refuses with "degrees of freedom < 0";
+so does `als_gls`. At $K = 4$ only $k = 1$ is identified; $K = 6$ admits
+$k \le 3$; $K = 20$ admits $k \le 14$.
 
 ---
 

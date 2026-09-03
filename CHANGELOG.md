@@ -7,6 +7,79 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`results.bootstrap(B, method, seed)`** on both `ALSGLSSystemResults` and
+  `ALSGLS`, returning a `BootstrapResults` with percentile-*t* `conf_int()`,
+  bootstrap-*t* `pvalues`, bootstrap `bse`, and the raw replicate arrays. Each
+  replicate refits `F`, `D` and `beta`, which is what captures the part of the
+  sampling variance the plug-in cannot: that `Sigma` is estimated. The
+  studentised interval is the calibrated object, per Rilstone and Veall (1996),
+  Fiebig and Kim (2000) and Horowitz (2019); the plug-in is biased the same way
+  inside each replicate as in the sample, so the quantiles absorb the bias.
+  Schemes: `"parametric"`, `"wild"`, `"residual"`. Pairs resampling is
+  deliberately absent — at `n = 20` it leaves ~63% distinct rows.
+
+  Validated on the Monte Carlo fixture at `n = 20` (100 replicates, B = 199):
+  the plug-in covers 0.875 and rejects a true null 0.105 of the time; the
+  parametric bootstrap-t covers 0.930 and rejects 0.050, with an interval width
+  1.00 times what a correctly calibrated normal interval would have. Cost:
+  `B = 999` takes about 20 s at K = 20, 40 s at K = 60 and 1.7 min at K = 100.
+- **`init_D`** keyword on `als_gls` to warm-start the Sigma step.
+- **`max_identified_rank(K)`** in `alsgls._validation`.
+
+### Changed
+
+- **The Sigma step is now L-BFGS-B on the profile likelihood over `log D`**,
+  with `F` concentrated out in closed form, on residuals standardised to unit
+  variance — exactly what R's `factanal` does, and for the reason it gives:
+  alternating the two closed forms is a fixed-point iteration that crawls when
+  a diagonal variance is small. On bootstrap replicates at `n = 20` the
+  alternation's per-fit cost had a median of 24 ms but a mean of 142 ms and a
+  maximum of 598 ms (11,619 inner iterations); the quasi-Newton step's mean is
+  1.7 ms and its maximum 7 ms, and where the alternation hit its cap it also
+  found a likelihood 4.6e-4 nats/row better. The gradient is the envelope
+  theorem, computed with the existing Woodbury kernels and verified against
+  finite differences to 3.7e-9. Every guard from 2.0.0 still holds: agreement
+  with sklearn's `FactorAnalysis`, BIC rank recovery, Zellner, monotonicity
+  in `k`.
+- **Standard errors now apply the residual degrees-of-freedom rescale**
+  `Sigma_ij * n / sqrt((n - p_i)(n - p_j))` that `linearmodels`
+  (`debiased=True`), R `systemfit` (`"geomean"`) and Stata `sureg` (`dfk`) all
+  apply. Applied as `F -> diag(sqrt c) F`, `D -> c * D`, which preserves the
+  low-rank structure exactly. Standard errors grow by `sqrt(n / (n - p))`.
+- **The OLS ridge initialisation uses the nominal `lam_B`**, not the
+  GLS-scaled `lam_B_eff`. An OLS ridge objective scales uniformly under
+  `Y -> sY`, so a fixed penalty is what gives `B -> sB`; the GLS objective has a
+  dimensionless first term and needs `lam / s^2`. Using the GLS scaling in the
+  OLS init made the starting point scale-dependent, which the forgiving
+  fixed-point Sigma step hid and the quasi-Newton one exposed.
+
+### Fixed
+
+- **Unidentified factor ranks were accepted.** The `k`-factor model spends
+  `K*k + K - k(k-1)/2` parameters on a covariance with `K(K+1)/2` free entries;
+  past Ledermann's bound `(K - k)^2 >= K + k` the loadings are not identified
+  and the likelihood has a ridge of maxima. R's `factanal` refuses with
+  "degrees of freedom < 0"; `als_gls` now does too, with the largest identified
+  rank in the message. `_auto_rank` and `_default_k_candidates` respect it.
+  Both Monte Carlo test suites had been running at `K = 4, k = 2` — 11
+  parameters for 10 free entries, df = -1 — and one helper at `K = 3, k = 2`.
+  Every calibration number they recorded was measured on a `Sigma` the data
+  could not pin down. They now run at `k = 1`.
+
+### Root cause of the standard-error shortfall, measured
+
+The plug-in `(X' Sigma_hat^-1 X)^-1` understated the sampling spread — se
+ratio 0.69 at `n = 20`. An oracle experiment splits it exactly:
+`0.69 = 0.77 x 0.88`. The first factor is the plug-in's bias at `Sigma_hat`
+(Jensen: the formula is concave in `Sigma`), the second is the extra spread
+feasible GLS carries over GLS at the true `Sigma`, which no formula at a fixed
+`Sigma_hat` can see. Both are Freedman and Peters (1984, JASA, Theorem 1). The
+oracle at the true `Sigma` is calibrated (1.03), so the linear algebra was
+never wrong; its inputs were. The df rescale closes about a fifth of the gap.
+The bootstrap closes the rest.
+
 ## [2.0.0] - 2026-09-02
 
 Note on version history: PyPI has only ever carried 0.1.0. The 1.0.0 and 1.1.0

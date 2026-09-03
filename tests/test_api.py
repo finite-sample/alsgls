@@ -22,8 +22,8 @@ def test_sklearn_api_matches_function():
     rng = np.random.default_rng(123)
     Xs, Y = _random_sur(rng, N=120, K=5, p=4)
 
-    direct = als_gls(Xs, Y, k=3, sweeps=10, rel_tol=1e-8)
-    model = ALSGLS(rank=3, max_sweeps=10, rel_tol=1e-8)
+    direct = als_gls(Xs, Y, k=2, sweeps=10, rel_tol=1e-8)
+    model = ALSGLS(rank=2, max_sweeps=10, rel_tol=1e-8)
     fitted = model.fit(Xs, Y)
 
     assert fitted is model
@@ -42,13 +42,13 @@ def test_sklearn_api_matches_function():
 
 def test_system_api_mirrors_estimator():
     rng = np.random.default_rng(321)
-    Xs, Y = _random_sur(rng, N=80, K=3, p=2)
+    Xs, Y = _random_sur(rng, N=80, K=4, p=2)
 
-    system = {f"eq{j}": (Y[:, j], Xs[j]) for j in range(3)}
-    sys_model = ALSGLSSystem(system, rank=2, max_sweeps=9, rel_tol=1e-8)
+    system = {f"eq{j}": (Y[:, j], Xs[j]) for j in range(4)}
+    sys_model = ALSGLSSystem(system, rank=1, max_sweeps=9, rel_tol=1e-8)
     results = sys_model.fit()
 
-    assert results.model.keqs == 3
+    assert results.model.keqs == 4
     assert results.model.nobs == 80
 
     preds = results.predict()
@@ -57,9 +57,9 @@ def test_system_api_mirrors_estimator():
 
     # Ensure the summary exposes key scalars
     summary = results.summary_dict()
-    assert summary["keqs"] == 3
+    assert summary["keqs"] == 4
     assert summary["nobs"] == 80
-    assert summary["rank"] == 2
+    assert summary["rank"] == 1
 
     # Recompute score and ensure consistency with estimator
     estimator_score = sys_model.estimator_.score(Xs, Y)

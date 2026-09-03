@@ -78,11 +78,19 @@ Background material and reproducible experiments are available in the notebooks 
 
 This package provides a modern, type-safe implementation of **Alternating-Least-Squares (ALS)** for low-rank GLS problems. The Woodbury identity reduces the expensive inverse to a tiny k × k system, and the β-update can be written without explicitly forming dense matrices. 
 
-**New in v1.2.0:**
-- **Standard errors** (`bse`) for all regression coefficients
-- **t-statistics** (`tvalues`) and **p-values** (`pvalues`) for hypothesis testing
-- **Confidence intervals** via `conf_int()` method
-- **Summary tables** via `summary()` for statsmodels-style output
+**Inference:**
+- **Standard errors** (`bse`), **t-statistics** (`tvalues`), **p-values**
+  (`pvalues`), **confidence intervals** (`conf_int()`) and **summary tables**
+  (`summary()`), statsmodels-style. These are the plug-in
+  `(X'Σ̂⁻¹X)⁻¹` after the degrees-of-freedom rescale every SUR package applies.
+  They treat Σ̂ as known, and so understate the sampling spread in small samples
+  by a factor that tracks the covariance parameter count over `n`: measured at
+  about 0.85 at `n = 20` and 0.97 at `n = 200` on a 4-equation system.
+- **Calibrated small-sample inference** via `results.bootstrap(B=999)`, which
+  refits the whole model on each replicate and returns percentile-*t*
+  intervals and bootstrap-*t* p-values. This is the object to report when `n`
+  is small relative to the number of equations; see
+  `docs/formal_methods.md` §7 for the measurements.
 
 **New in v1.1.0:**
 - **Rank selection**: BIC and cross-validation for automatic rank selection

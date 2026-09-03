@@ -100,7 +100,7 @@ def test_the_likelihood_is_non_increasing_in_the_rank(K, true_k, seed) -> None:
     varies with k. Measured rises of up to 2.0 nats/row before the change."""
     Xs, Y, _, _ = simulate_sur(N_tr=200, N_te=5, K=K, p=3, k=true_k, seed=seed)
     nll = np.array(
-        [als_gls(Xs, Y, k=k, sweeps=30)[4]["nll_trace"][-1] for k in range(1, 9)]
+        [als_gls(Xs, Y, k=k, sweeps=30)[4]["nll_trace"][-1] for k in range(1, 8)]
     )
     assert np.diff(nll).max() <= 1e-6, f"rises by {np.diff(nll).max():.4f}"
 
@@ -112,7 +112,7 @@ def test_bic_recovers_the_true_rank(K: int, true_k: int, seed: int) -> None:
     2, 4, 5, 3 and 6: the shortfall shrinks as k grows, so the likelihood kept
     improving for a reason that had nothing to do with the data."""
     Xs, Y, _, _ = simulate_sur(N_tr=200, N_te=5, K=K, p=3, k=true_k, seed=seed)
-    chosen, _ = select_rank_bic(Xs, Y, k_candidates=list(range(1, 11)), sweeps=30)
+    chosen, _ = select_rank_bic(Xs, Y, k_candidates=list(range(1, 8)), sweeps=30)
     assert chosen == true_k
 
 

@@ -14,7 +14,9 @@ from alsgls.sim import simulate_gls
 
 def test_als_shapes_and_mse_improvement():
     # Synthesize a small GLS problem
-    p_list = [3, 5, 4]
+    # Five equations: the smallest system on which a rank-2 factor covariance
+    # is identified ((K - k)^2 >= K + k needs K >= 5 at k = 2).
+    p_list = [3, 5, 4, 2, 3]
     X_tr, Y_tr, X_te, Y_te = simulate_gls(40, 40, p_list, k=2, seed=0)
 
     # Baseline per-equation ridge OLS
