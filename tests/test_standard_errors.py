@@ -6,40 +6,57 @@ its correct size is still symmetric, still positive definite, still the right
 shape, and still produces intervals that contain the point estimate. The three
 claims ``bse``, ``conf_int()`` and ``pvalues`` actually make -- that the reported
 standard error matches the sampling spread, that the interval covers 95% of the
-time, and that a 5% test rejects a true null 5% of the time -- had no test at
-all.
-
-They do now, at the bottom of this file, as Monte Carlo studies gated by
+time, and that a 5% test rejects a true null 5% of the time -- are gated at the
+bottom of this file as Monte Carlo studies, using
 `simcheck <https://github.com/finite-sample/simcheck>`_ in the style of
 ``tests/test_econometrics.py``.
 
-**What they found.** ``cov_params`` is ``(X'S^-1 X + lam I)^-1`` where ``S =
-FF' + diag(D)`` is the *estimated* factor covariance. It is the right formula for
-a GLS estimator with a **known** covariance, and the package plugs an estimated
-one into it, so the sampling variability of ``F_hat`` and ``D_hat`` is missing
-from every standard error it reports. The intervals are therefore
-anti-conservative, badly so in small samples. Measured over 800 replicates (600
-in the n = 3200 column, which is slow), four equations, three regressors each,
-rank 2, averaged over the twelve coefficients:
+**What the plug-in is.** ``cov_params`` is ``(X' S_c^-1 X + lam I)^-1`` with
+``S_c`` the estimated ``FF' + diag(D)`` after the residual degrees-of-freedom
+rescale every SUR package applies. It is the variance of a GLS estimator whose
+covariance is *known*. Ours is estimated from the same data, and that costs in
+two ways, which Freedman and Peters (1984, JASA 79, Theorem 1) order as
+``var(beta_FGLS) > var(beta_GLS) > E[reported var]``. An oracle experiment on
+this file's fixture splits the measured shortfall exactly: at n = 20 the se
+ratio of 0.69 is 0.77 (the plug-in's bias at S_hat; Jensen, since the formula
+is concave in S) times 0.88 (the extra spread feasible GLS has over GLS at the
+true S, which no formula at a fixed S_hat can see). The oracle at the true S is
+calibrated at 1.03, so the linear algebra is right and its inputs are not.
 
-    n        15     20     25    200    3200
-    se ratio 0.637  0.726  0.773  0.972  1.005
-    coverage 0.784  0.838  0.864  0.942  0.951
-    size     0.22   0.17   0.13   0.056  0.050
+**The fixture.** Four equations, three regressors each, rank 1. It used to be
+rank 2, which K = 4 does not identify: the factor model would spend 11
+parameters on a covariance with 10 free entries (Ledermann's bound, factanal
+df = -1), the likelihood has a ridge of maxima, and every number this module
+recorded before was measured on a S the data could not pin down. ``als_gls``
+now refuses that geometry.
 
-The last column is the reassuring one: this is a finite-sample effect and it is
-gone by n = 3200. The middle of the table is not. At n = 200 -- the size every
-other fixture in this repository uses -- a nominal 95% interval covers about 94%
-and a nominal 5% test rejects a true null about 5.6% of the time. At n = 20 the
-interval covers 84%.
+**Measured, at rank 1, 100 replicates, B = 199** (``se ratio`` is mean reported
+SE over the actual spread; ``width`` is mean interval width over what a
+correctly calibrated normal interval would have):
+
+    n = 20                se ratio  coverage  size   width
+    plug-in (df-rescaled)   0.83      0.875    0.105   0.83
+    bootstrap-t, parametric 0.81      0.930    0.050   1.00
+    bootstrap-t, residual   0.86      0.928    0.045   1.00
+    bootstrap-t, wild       0.85      0.898    0.068   0.93
+    3-sigma band                   [0.885, 1]  [0, 0.115]
+
+The plug-in fails both gates. The parametric bootstrap-t interval passes both,
+with size exactly at nominal and width at 1.00 -- it is calibrated and it is
+not vacuous. Note the bootstrap's own ``se ratio`` is still 0.81: the bootstrap
+*standard error* is biased down (Freedman and Peters measured 20-30%), because
+each replicate is drawn from a S_hat that is too small. The studentised
+interval does not care, because the plug-in is biased the same way inside each
+replicate as in the sample, and the quantiles absorb it. That is why the
+interval, not the SE, is the calibrated object (Rilstone and Veall 1996;
+Fiebig and Kim 2000; Horowitz 2019).
 
 **Why that is a property of the estimator and not of the study.** The same
 replicates are also fitted by equation-by-equation OLS. Marginally, equation j's
 error is ``N(0, (FF')_jj + D_j)`` and independent across rows, so textbook OLS
 inference is *exact* for this data generating process at any sample size. It is
-run through the identical gates, and it passes them at n = 20 where alsgls fails
-them: coverage 0.9486 to 0.9524 over 20000 replicates, against alsgls's 0.809 to
-0.859. Whatever is wrong is not the sample size, the fixture or the gate.
+run through the identical gates, and it passes them at n = 20 where the plug-in
+fails them. Whatever is wrong is not the sample size, the fixture or the gate.
 
 Note that OLS's own ``se_ratio`` sits at about 0.985 rather than 1.000, and that
 is correct: ``E[s]`` is below ``sigma`` by ``1/(4 df)`` for a chi distribution,
@@ -55,6 +72,7 @@ from scipy import stats
 from simcheck import (
     MonteCarloResult,
     assert_coverage,
+    assert_intervals_informative,
     assert_proportion,
     assert_se_calibrated,
     binomial_band,
@@ -64,7 +82,7 @@ from alsgls import ALSGLS, ALSGLSSystem
 from alsgls.ops import XB_from_Blist, compute_prediction_variance, compute_XtSigmaInvX
 
 
-def _random_sur(rng, N=100, K=4, p=3, k=2):
+def _random_sur(rng, N=100, K=4, p=3, k=1):
     """Generate random SUR data with known factor structure."""
     Xs = [rng.standard_normal((N, p)) for _ in range(K)]
     B = [rng.standard_normal((p, 1)) for _ in range(K)]
@@ -111,7 +129,7 @@ class TestComputeXtSigmaInvX:
     def test_matches_dense_computation(self):
         """Woodbury-based computation should match dense matrix computation."""
         rng = np.random.default_rng(42)
-        Xs, _Y, _, F, D = _random_sur(rng, N=50, K=4, p=3, k=2)
+        Xs, _Y, _, F, D = _random_sur(rng, N=50, K=4, p=3, k=1)
 
         woodbury_result = compute_XtSigmaInvX(Xs, F, D, lam_B=0.0)
         dense_result = _dense_XtSigmaInvX(Xs, F, D, lam_B=0.0)
@@ -121,7 +139,7 @@ class TestComputeXtSigmaInvX:
     def test_matches_dense_with_regularization(self):
         """Regularization should be added correctly."""
         rng = np.random.default_rng(43)
-        Xs, _Y, _, F, D = _random_sur(rng, N=50, K=4, p=3, k=2)
+        Xs, _Y, _, F, D = _random_sur(rng, N=50, K=4, p=3, k=1)
 
         lam_B = 0.1
         woodbury_result = compute_XtSigmaInvX(Xs, F, D, lam_B=lam_B)
@@ -140,7 +158,7 @@ class TestComputeXtSigmaInvX:
     def test_is_positive_definite(self):
         """X'Σ⁻¹X should be positive definite."""
         rng = np.random.default_rng(45)
-        Xs, _Y, _, F, D = _random_sur(rng, N=100, K=4, p=3, k=2)
+        Xs, _Y, _, F, D = _random_sur(rng, N=100, K=4, p=3, k=1)
 
         result = compute_XtSigmaInvX(Xs, F, D, lam_B=0.01)
         eigvals = np.linalg.eigvalsh(result)
@@ -152,9 +170,9 @@ class TestInferenceProperties:
     def fitted_results(self):
         """Fit a model and return results."""
         rng = np.random.default_rng(100)
-        Xs, Y, _, _, _ = _random_sur(rng, N=100, K=4, p=3, k=2)
+        Xs, Y, _, _, _ = _random_sur(rng, N=100, K=4, p=3, k=1)
         system = {f"eq{j}": (Y[:, j], Xs[j]) for j in range(4)}
-        model = ALSGLSSystem(system, rank=2, max_sweeps=12, lam_B=1e-3)
+        model = ALSGLSSystem(system, rank=1, max_sweeps=12, lam_B=1e-3)
         return model.fit()
 
     def test_cov_params_shape(self, fitted_results):
@@ -238,9 +256,9 @@ class TestInferenceCaching:
     def test_cov_params_cached(self):
         """cov_params should be computed once and cached."""
         rng = np.random.default_rng(200)
-        Xs, Y, _, _, _ = _random_sur(rng, N=80, K=3, p=2, k=2)
-        system = {f"eq{j}": (Y[:, j], Xs[j]) for j in range(3)}
-        model = ALSGLSSystem(system, rank=2)
+        Xs, Y, _, _, _ = _random_sur(rng, N=80, K=4, p=2, k=1)
+        system = {f"eq{j}": (Y[:, j], Xs[j]) for j in range(4)}
+        model = ALSGLSSystem(system, rank=1)
         results = model.fit()
 
         cov1 = results.cov_params
@@ -249,21 +267,21 @@ class TestInferenceCaching:
 
 
 class TestEdgeCases:
-    def test_single_equation(self):
-        """Inference should work with single equation."""
+    def test_single_equation_is_refused(self):
+        """One equation cannot identify a factor covariance.
+
+        With K = 1 the model F F' + D has two parameters for one variance, and
+        the likelihood is flat along F^2 + D = const. Any F, D returned would
+        be arbitrary, and a package that reports them is reporting noise.
+        factanal refuses for the same reason; so does this, with a pointer to
+        the estimator that is right for the job."""
         rng = np.random.default_rng(300)
         N, p = 100, 3
         X = rng.standard_normal((N, p))
-        beta = rng.standard_normal((p, 1))
-        Y = X @ beta + rng.standard_normal((N, 1))
+        Y = X @ rng.standard_normal((p, 1)) + rng.standard_normal((N, 1))
 
-        system = {"eq0": (Y, X)}
-        model = ALSGLSSystem(system, rank=1, lam_B=1e-3)
-        results = model.fit()
-
-        assert results.bse.shape == (p,)
-        assert np.all(results.bse > 0)
-        assert results.pvalues.shape == (p,)
+        with pytest.raises(ValueError, match="fit each by OLS"):
+            ALSGLSSystem({"eq0": (Y, X)}, rank=1, lam_B=1e-3).fit()
 
     def test_many_parameters(self):
         """Inference should work with many parameters."""
@@ -327,7 +345,7 @@ class TestPredictionIntervalsSystemResults:
     def model_and_data(self):
         """Fit model and generate test data."""
         rng = np.random.default_rng(500)
-        N_tr, N_te, K, p, k = 100, 30, 4, 3, 2
+        N_tr, N_te, K, p, k = 100, 30, 4, 3, 1
 
         Xs_tr, Y_tr, B, F, D = _random_sur(rng, N=N_tr, K=K, p=p, k=k)
         Xs_te = [rng.standard_normal((N_te, p)) for _ in range(K)]
@@ -459,7 +477,7 @@ class TestPredictionIntervalsALSGLS:
     def fitted_alsgls(self):
         """Fit ALSGLS model and return with test data."""
         rng = np.random.default_rng(600)
-        N_tr, N_te, K, p, k = 100, 30, 4, 3, 2
+        N_tr, N_te, K, p, k = 100, 30, 4, 3, 1
 
         Xs_tr, Y_tr, B, F, D = _random_sur(rng, N=N_tr, K=K, p=p, k=k)
         Xs_te = [rng.standard_normal((N_te, p)) for _ in range(K)]
@@ -515,30 +533,19 @@ class TestPredictionIntervalsALSGLS:
 
 
 class TestPredictionIntervalsEdgeCases:
-    def test_single_equation(self):
-        """Prediction intervals should work with single equation."""
+    def test_single_equation_is_refused(self):
+        """See ``TestEdgeCases.test_single_equation_is_refused``."""
         rng = np.random.default_rng(700)
-        N_tr, N_te, p = 100, 20, 3
+        N_tr, p = 100, 3
         X_tr = rng.standard_normal((N_tr, p))
-        beta = rng.standard_normal((p, 1))
-        Y_tr = X_tr @ beta + rng.standard_normal((N_tr, 1))
-        X_te = rng.standard_normal((N_te, p))
-
-        system = {"eq0": (Y_tr, X_tr)}
-        model = ALSGLSSystem(system, rank=1, lam_B=1e-3)
-        results = model.fit()
-
-        pred = results.get_prediction({"eq0": X_te})
-        assert pred.predicted_mean.shape == (N_te, 1)
-        assert pred.se_obs.shape == (N_te, 1)
-
-        ci = pred.conf_int_obs(alpha=0.05)
-        assert ci.shape == (N_te, 1, 2)
+        Y_tr = X_tr @ rng.standard_normal((p, 1)) + rng.standard_normal((N_tr, 1))
+        with pytest.raises(ValueError, match="fit each by OLS"):
+            ALSGLSSystem({"eq0": (Y_tr, X_tr)}, rank=1, lam_B=1e-3).fit()
 
     def test_single_observation(self):
         """Prediction intervals should work with single new observation."""
         rng = np.random.default_rng(701)
-        N_tr, K, p, k = 100, 4, 3, 2
+        N_tr, K, p, k = 100, 4, 3, 1
 
         Xs_tr, Y_tr, _, _, _ = _random_sur(rng, N=N_tr, K=K, p=p, k=k)
         Xs_te = [rng.standard_normal((1, p)) for _ in range(K)]
@@ -560,7 +567,11 @@ class TestPredictionIntervalsEdgeCases:
 # shape-checks. See the module docstring for what they measured.
 # ==========================================================================
 
-MC_K, MC_P, MC_RANK = 4, 3, 2
+# K = 4 identifies only a single factor: Ledermann's bound (K - k)^2 >= K + k
+# fails at k = 2, where the factor model would spend 11 parameters on a 4 x 4
+# covariance with 10 free entries. Every number this module used to record was
+# measured at k = 2, on a Sigma the data could not pin down.
+MC_K, MC_P, MC_RANK = 4, 3, 1
 
 # The sample size every other fixture in this repository uses, and the one the
 # README's examples are the size of.
@@ -575,7 +586,7 @@ MC_N = 200
 MC_SMALL_N = 20
 
 # Fixed rather than taken from the simcheck tier, for the reason given at
-# ``test_econometrics.py::test_the_pairs_bootstrap_is_caught_under_covering``:
+# ``test_econometrics.py::test_a_deliberately_narrow_interval_is_caught``:
 # the fast tier's 100 replicates put the coverage floor at 0.885 and the
 # se-ratio's own Monte Carlo spread at 7%, which is too coarse to say anything
 # about a correctly calibrated estimator, let alone to separate one from a
@@ -806,16 +817,19 @@ def test_the_standard_errors_are_caught_understating_the_spread(index):
     """``bse`` is smaller than the spread the estimator actually has.
 
     ``cov_params`` is the covariance of a GLS estimator whose weighting matrix is
-    *known*. The weighting matrix here is estimated -- ``F_hat`` and ``D_hat``
-    come out of the same ALS sweeps as the coefficients -- and none of that
+    *known*. The weighting matrix here is estimated, and none of that
     variability reaches the standard error. Measured ratio of reported to actual
-    spread at n = 20: 0.684 to 0.758 across the twelve coefficients, against
-    0.941 to 1.003 for exact OLS on the identical draws.
+    spread at n = 20, after the df rescale: 0.79 to 0.88 across the tracked
+    coefficients, against 0.94 to 1.00 for exact OLS on the identical draws.
+    The ceiling for *any* formula evaluated at a fixed ``S_hat`` -- the SE at
+    the true ``S`` over the actual FGLS spread -- is 0.88 at this n, so the
+    plug-in is now close to as good as a plug-in can be, and still short.
 
     Written as a required failure rather than a tolerance, because that is the
     honest encoding: the claim is false at this sample size, and if a future
     change makes ``assert_se_calibrated`` pass here, this test says so loudly
-    instead of quietly starting to certify something it never checked.
+    instead of quietly starting to certify something it never checked. The
+    calibrated object is ``bootstrap()``; see the tests below.
 
     Args:
         index: Which coefficient to track.
@@ -824,68 +838,61 @@ def test_the_standard_errors_are_caught_understating_the_spread(index):
     with pytest.raises(AssertionError, match="observed spread"):
         assert_se_calibrated(study, f"alsgls coefficient {index}")
 
-    assert study.se_ratio < 0.85, (
+    # Measured 0.79-0.88; the fixed-S_hat ceiling is 0.88. Anything above 0.92
+    # would mean the plug-in is exceeding what the oracle says is possible.
+    assert study.se_ratio < 0.92, (
         f"coefficient {index}: reported SE is {study.se_ratio:.3f} times the "
         "observed spread"
     )
 
 
-@pytest.mark.parametrize("index", MC_TRACKED)
-def test_the_confidence_intervals_are_caught_under_covering(index):
-    """A nominal 95% interval covers about 84% at n = 20.
+def _mean_over(studies, indices, attr):
+    return float(np.mean([getattr(studies[i], attr) for i in indices]))
+
+
+def test_the_confidence_intervals_are_caught_under_covering():
+    """A nominal 95% plug-in interval covers about 0.90 at n = 20.
 
     The consequence of the previous test, and the one a user would feel. Exact
     OLS on the same replicates covers at 0.95, so this is not a statement about
     how hard inference is at n = 20.
 
-    Args:
-        index: Which coefficient to track.
+    Gated on the mean over the tracked coefficients rather than per
+    coefficient. After the df rescale the per-coefficient coverage runs 0.875
+    to 0.915 against a 3-sigma floor of 0.917 at 400 replicates, so one
+    coefficient sits a hair inside the band and a per-coefficient gate would
+    fail on the seed rather than on the estimator. The mean, 0.899, is not
+    marginal.
     """
-    study = _mc_studies(MC_SMALL_N)["alsgls"][index]
-    with pytest.raises(AssertionError, match="outside the 3-sigma band"):
-        assert_coverage(study, 0.95, f"alsgls coefficient {index}")
-
-    low, _ = binomial_band(0.95, study.reps)
-    assert study.coverage < low, (
-        f"coefficient {index}: coverage {study.coverage:.3f} against a floor of "
-        f"{low:.3f}"
-    )
+    studies = _mc_studies(MC_SMALL_N)["alsgls"]
+    coverage = _mean_over(studies, MC_TRACKED, "coverage")
+    low, _ = binomial_band(0.95, studies[MC_TRACKED[0]].reps)
+    assert coverage < low, f"mean coverage {coverage:.3f} against a floor of {low:.3f}"
+    assert coverage > 0.80, f"mean coverage {coverage:.3f}: worse than measured"
 
 
-@pytest.mark.parametrize("index", MC_NULLS)
-def test_the_p_values_are_caught_over_rejecting_a_true_null(index):
-    """A nominal 5% test rejects a true null about 17% of the time at n = 20.
+def test_the_p_values_are_caught_over_rejecting_a_true_null():
+    """A nominal 5% plug-in test rejects a true null about 11% of the time at n = 20.
 
-    The same defect expressed as size. A standard error too small by a quarter
-    inflates every t statistic by a third, and the tail of the t distribution is
-    steep enough to turn that into a threefold rejection rate.
-
-    Args:
-        index: Which null coefficient to track.
+    The same defect expressed as size. Measured per null coefficient 0.09 to
+    0.14 against a 3-sigma ceiling of 0.083; gated on the mean, 0.111, for the
+    reason given in the coverage test.
     """
-    study = _mc_studies(MC_SMALL_N)["alsgls"][index]
-    with pytest.raises(AssertionError, match="outside the 3-sigma band"):
-        assert_proportion(
-            study.rejection_rate, study.reps, 0.05, f"alsgls size at {index}"
-        )
-
-    _, high = binomial_band(0.05, study.reps)
-    assert study.rejection_rate > high, (
-        f"coefficient {index}: rejected {study.rejection_rate:.3f} of the time "
-        f"against a ceiling of {high:.3f}"
-    )
+    studies = _mc_studies(MC_SMALL_N)["alsgls"]
+    size = _mean_over(studies, MC_NULLS, "rejection_rate")
+    _, high = binomial_band(0.05, studies[MC_NULLS[0]].reps)
+    assert size > high, f"mean size {size:.3f} against a ceiling of {high:.3f}"
+    assert size < 0.20, f"mean size {size:.3f}: worse than measured"
 
 
 @pytest.mark.parametrize("index", MC_TRACKED)
 def test_the_deficit_shrinks_as_the_sample_grows(index):
     """It is a finite-sample effect, not a wrong formula, and this pins that.
 
-    Nuisance-parameter cost is O(1/n), so the gap must close. Measured mean ratio
-    of reported standard error to observed spread: 0.726 at n = 20, 0.972 at
-    n = 200, 1.005 at n = 3200, and coverage 0.838, 0.942, 0.951. The n = 3200
-    study is not run here -- 400 refits at that size is several minutes -- but
-    n = 200 against n = 20 is enough to establish the direction, and the gap
-    between them is far too large for the replicate count to be in doubt.
+    Nuisance-parameter cost is O(1/n), so the gap must close. Measured ratio of
+    reported standard error to observed spread, per tracked coefficient: 0.79 to
+    0.88 at n = 20 against 0.98 to 1.01 at n = 200, and coverage 0.875 to 0.915
+    against 0.93 to 0.96.
 
     This is also the test that would fail if somebody "fixed" the small-sample
     behaviour by inflating every standard error by a constant: the deficit would
@@ -899,11 +906,11 @@ def test_the_deficit_shrinks_as_the_sample_grows(index):
 
     assert small.se_ratio < large.se_ratio, (small.se_ratio, large.se_ratio)
     assert small.coverage < large.coverage, (small.coverage, large.coverage)
-    # The measured gap is about 0.25 in the ratio and 0.10 in coverage, so a
-    # tenth of it is a wide margin against Monte Carlo noise while still being
-    # small enough to catch the deficit failing to close.
-    assert large.se_ratio - small.se_ratio > 0.1, (small.se_ratio, large.se_ratio)
-    assert large.coverage - small.coverage > 0.04, (small.coverage, large.coverage)
+    # The measured gap is 0.09 to 0.19 in the ratio and 0.03 to 0.06 in
+    # coverage. Half the smallest is a margin against Monte Carlo noise that
+    # still catches the deficit failing to close.
+    assert large.se_ratio - small.se_ratio > 0.05, (small.se_ratio, large.se_ratio)
+    assert large.coverage - small.coverage > 0.015, (small.coverage, large.coverage)
 
 
 def test_the_deficit_survives_at_the_sample_size_this_repository_fixtures_at():
@@ -935,3 +942,175 @@ def test_the_deficit_survives_at_the_sample_size_this_repository_fixtures_at():
     # of 0.027 over twelve paired coefficients is far outside what re-drawing a
     # handful of replicates could move.
     assert ols_ratio - alsgls_ratio > 0.01, (alsgls_ratio, ols_ratio)
+
+
+# --------------------------------------------------------------------------
+# The fix: bootstrap-t inference passes the gates the plug-in fails.
+# --------------------------------------------------------------------------
+
+# Fewer replicates than the plug-in study, because each carries a bootstrap:
+# 100 replicates x B = 99 is ~10,000 refits, about three minutes. The 3-sigma
+# coverage band at 100 replicates is [0.885, 1.0], loose but not vacuous, and
+# the same trade the prediction-interval study in test_econometrics.py makes.
+# B = 99 rather than 999 because these gates are on coverage and size at 5%,
+# where 99 is adequate (Davidson and MacKinnon's rule wants alpha (B + 1)
+# integer, and 0.05 x 100 = 5), and the measured difference between B = 99 and
+# B = 199 on this fixture is inside the band.
+BOOT_REPS = 100
+BOOT_B = 99
+BOOT_METHOD = "parametric"
+
+
+@functools.cache
+def _mc_bootstrap_study(n, reps=BOOT_REPS, B=BOOT_B, method=BOOT_METHOD, seed=0):
+    """Fit, bootstrap, and record both the plug-in and the bootstrap-t inference.
+
+    Both are recorded on the same draws so the gates below can be *paired*:
+    the difference between two estimators on identical replicates has far less
+    Monte Carlo noise than either level, which is what makes 100 replicates
+    enough. An earlier version gated the bootstrap on its level alone and
+    passed with the bootstrap sabotaged to return the plug-in interval, because
+    on these draws the plug-in happens to sit inside the loose 100-replicate
+    band. Endpoints are recorded so ``assert_intervals_informative`` can rule
+    out a vacuous interval.
+
+    Args:
+        n: Rows per equation.
+        reps: Number of replicates.
+        B: Bootstrap replicates per fit.
+        method: Resampling scheme.
+        seed: Seed for the replicate stream.
+
+    Returns:
+        dict: ``{"boot": {index: MonteCarloResult}, "plugin": {...}}``.
+    """
+    Xs, B_true, F, D, truth = _mc_truth(n)
+    n_params = MC_K * MC_P
+    quantile = stats.t.ppf(0.975, n * MC_K - n_params)
+    rec = {
+        tag: {f: np.empty((reps, n_params)) for f in ("est", "se", "lo", "hi")}
+        for tag in ("boot", "plugin")
+    }
+    for tag in rec:
+        rec[tag]["rej"] = np.empty((reps, n_params), dtype=bool)
+
+    for i, child in enumerate(np.random.SeedSequence(seed).spawn(reps)):
+        rng = np.random.default_rng(child)
+        Y = _mc_draw(rng, Xs, B_true, F, D)
+        system = {f"eq{j}": (Y[:, j], Xs[j]) for j in range(MC_K)}
+        fitted = ALSGLSSystem(system, rank=MC_RANK, lam_B=0.0, max_sweeps=12).fit()
+
+        r = rec["plugin"]
+        r["est"][i] = fitted.params
+        r["se"][i] = fitted.bse
+        r["lo"][i] = fitted.params - quantile * fitted.bse
+        r["hi"][i] = fitted.params + quantile * fitted.bse
+        r["rej"][i] = fitted.pvalues < 0.05
+
+        boot = fitted.bootstrap(
+            B=B, method=method, seed=int(child.generate_state(1)[0])
+        )
+        ci = boot.conf_int(alpha=0.05)
+        r = rec["boot"]
+        r["est"][i] = fitted.params
+        r["se"][i] = boot.bse
+        r["lo"][i] = ci[:, 0]
+        r["hi"][i] = ci[:, 1]
+        r["rej"][i] = boot.pvalues < 0.05
+
+    return {
+        tag: {
+            index: MonteCarloResult(
+                estimates=r["est"][:, index],
+                standard_errors=r["se"][:, index],
+                covered=None,
+                lowers=r["lo"][:, index],
+                uppers=r["hi"][:, index],
+                rejected=r["rej"][:, index],
+                truth=float(truth[index]),
+            )
+            for index in range(n_params)
+        }
+        for tag, r in rec.items()
+    }
+
+
+def test_bootstrap_t_intervals_pass_the_coverage_gate():
+    """The percentile-t interval covers at the nominal rate where the plug-in does not.
+
+    Same draws, same n = 20. Two assertions, and the second is the one that
+    discriminates. First, the bootstrap's mean coverage over the tracked
+    coefficients sits inside the 3-sigma band, measured 0.93 against a floor of
+    0.885 at 100 replicates. Second, and paired on identical draws, it exceeds
+    the plug-in's by a margin: measured +0.055, gated at +0.02. Sabotaging the
+    bootstrap to return the plug-in interval passes the first assertion on these
+    draws and fails the second by construction, which is why the second exists.
+
+    The parametric scheme was chosen because it had the best size of the three
+    (0.050 against 0.045 residual and 0.068 wild) and a width ratio of 1.00.
+    """
+    study = _mc_bootstrap_study(MC_SMALL_N)
+    boot = _mean_over(study["boot"], MC_TRACKED, "coverage")
+    plugin = _mean_over(study["plugin"], MC_TRACKED, "coverage")
+    low, _ = binomial_band(0.95, study["boot"][MC_TRACKED[0]].reps)
+    assert boot >= low, (
+        f"bootstrap-t mean coverage {boot:.3f} below the floor {low:.3f}"
+    )
+    assert boot - plugin > 0.02, (
+        f"bootstrap-t coverage {boot:.3f} is not above the plug-in's {plugin:.3f} "
+        "on the same draws"
+    )
+
+
+def test_bootstrap_t_tests_pass_the_size_gate():
+    """A 5% bootstrap-t test rejects a true null 5% of the time at n = 20.
+
+    Measured mean size over the null coefficients 0.05 against a 3-sigma
+    ceiling of 0.115 at 100 replicates. The paired assertion is the one that
+    discriminates: the plug-in rejects 0.11 on the same draws, a gap of 0.06,
+    gated at 0.02. See the coverage test for why the level alone is not enough.
+    """
+    study = _mc_bootstrap_study(MC_SMALL_N)
+    boot = _mean_over(study["boot"], MC_NULLS, "rejection_rate")
+    plugin = _mean_over(study["plugin"], MC_NULLS, "rejection_rate")
+    _, high = binomial_band(0.05, study["boot"][MC_NULLS[0]].reps)
+    assert boot <= high, (
+        f"bootstrap-t mean size {boot:.3f} above the ceiling {high:.3f}"
+    )
+    assert plugin - boot > 0.02, (
+        f"bootstrap-t size {boot:.3f} is not below the plug-in's {plugin:.3f} on the "
+        "same draws"
+    )
+
+
+@pytest.mark.parametrize("index", MC_TRACKED)
+def test_bootstrap_t_intervals_are_not_vacuous(index):
+    """Covering by being wide is not calibration.
+
+    simcheck's ``assert_intervals_informative`` exists because a previous
+    package shipped an inflation heuristic that drove the reported standard
+    error to 3e7 times the estimation error while coverage stayed high. The
+    percentile-t interval's mean width is 1.00 times what a correctly
+    calibrated normal interval would have, so this passes with room; the gate
+    is here so that it keeps passing.
+
+    Args:
+        index: Which coefficient to track.
+    """
+    study = _mc_bootstrap_study(MC_SMALL_N)["boot"][index]
+    assert_intervals_informative(study, 0.95, f"bootstrap-t coefficient {index}")
+
+
+def test_the_bootstrap_standard_error_is_not_the_calibrated_object():
+    """``bse`` from the bootstrap is still short; the interval is what is calibrated.
+
+    Freedman and Peters (1984) measured the bootstrap standard error 20-30%
+    short in their SUR design, because each replicate is drawn from a
+    ``Sigma_hat`` that is itself too small. Measured here 0.81 to 0.86 of the
+    actual spread. This records that fact so that nobody reads ``boot.bse`` as
+    a calibrated number: the studentised quantiles absorb the bias, the raw
+    spread of the replicates does not.
+    """
+    studies = _mc_bootstrap_study(MC_SMALL_N)["boot"]
+    ratio = _mean_over(studies, MC_TRACKED, "se_ratio")
+    assert 0.7 < ratio < 0.95, f"bootstrap se ratio {ratio:.3f}"

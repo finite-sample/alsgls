@@ -111,6 +111,18 @@ def _check_array_compatibility(
             )
 
 
+def max_identified_rank(K: int) -> int:
+    """Largest factor rank identified for ``K`` equations (Ledermann's bound).
+
+    Args:
+        K: Number of equations.
+
+    Returns:
+        The largest ``k`` with ``(K - k)^2 >= K + k``, or ``0`` if none.
+    """
+    return max((k for k in range(1, K) if (K - k) ** 2 >= K + k), default=0)
+
+
 def _validate_rank_parameter(k: Any, N: int, K: int, *, name: str = "k") -> int:
     """Validate and convert rank parameter.
 
@@ -139,6 +151,29 @@ def _validate_rank_parameter(k: Any, N: int, K: int, *, name: str = "k") -> int:
         raise ValueError(
             f"{name}={k_int} must be between 1 and min(K={K}, N={N})={max_rank}. "
             f"Try reducing {name} or increasing the number of samples/equations."
+        )
+
+    # Ledermann's bound. The k-factor model spends K*k + K - k(k-1)/2 parameters
+    # on a covariance with K(K+1)/2 free entries; when the first exceeds the
+    # second the loadings are not identified, the likelihood has a ridge of
+    # maxima rather than one, and any inference built on Sigma_hat is inference
+    # on a quantity the data cannot pin down. R's factanal refuses with
+    # "degrees of freedom < 0"; so does this. Equivalent to (K - k)^2 >= K + k.
+    df = ((K - k_int) ** 2 - K - k_int) / 2
+    if df < 0:
+        largest = max_identified_rank(K)
+        if largest == 0:
+            raise ValueError(
+                f"No factor rank is identified for K={K} equations: a one-factor "
+                "model needs at least three. With so few equations there is no "
+                "cross-equation covariance worth modelling; fit each by OLS."
+            )
+        raise ValueError(
+            f"{name}={k_int} is not identified for K={K} equations: the factor model "
+            f"would have {K * k_int + K - k_int * (k_int - 1) // 2} covariance "
+            f"parameters for a covariance with only {K * (K + 1) // 2} free entries "
+            f"(factanal df = {df:g}). The largest identified rank at K={K} is "
+            f"{largest}."
         )
 
     return k_int

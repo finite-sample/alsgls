@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 import numpy as np
+from scipy.optimize import minimize
 
 from ._validation import _validate_convergence_params, _validate_gls_inputs
 from .metrics import nll_per_row
@@ -18,22 +19,47 @@ from .ops import (
     woodbury_chol,
 )
 
-#: Iteration cap for the inner Sigma alternation. Matches the budget
-#: ``sklearn.decomposition.FactorAnalysis`` allows its identical loop; the
-#: iterations are cheap and the guard below almost always stops far sooner.
-_SIGMA_MAX_ITER = 1000
+#: Iteration cap for the quasi-Newton Sigma step. It converges in about ten
+#: iterations on every case measured; the cap exists so a pathological fit
+#: cannot hang.
+_SIGMA_MAX_ITER = 200
 
-#: Relative likelihood decrease below which the inner alternation stops.
-#: Chosen by measurement rather than taste. On a small system (K=4, k=2, N=200)
-#: the cost from 1e-12 to 1e-4 runs 29.6, 18.3, 8.3, 3.7, 5.5 ms while the
-#: likelihood moves 0, 8e-9, 8e-7, 2e-5, 2e-4 nats/row; on a large one (K=100)
-#: every setting agrees to nine decimals. 1e-8 buys a 2.2x speedup over 1e-10
-#: for under 1e-6 nats, against the 8 to 54 nats this step gains over the
-#: gradient version it replaced. Looser still is counterproductive: at 1e-4 the
-#: inner loop stops so early that the outer sweep loop stops converging and
-#: runs its full budget, which is why 1e-4 is slower than 1e-6 above.
-#: For reference, sklearn's FactorAnalysis defaults to an absolute 1e-2.
-_SIGMA_TOL = 1e-9
+#: Relative decrease of the profile likelihood below which the Sigma step
+#: stops. With a quasi-Newton step this is reached in a handful of iterations,
+#: so it can be tight at no real cost.
+_SIGMA_TOL = 1e-12
+
+
+def _lawley_F(R: np.ndarray, D: np.ndarray, k: int) -> np.ndarray:
+    """The maximising ``F`` at fixed ``D``, in closed form.
+
+    For ``S = R^T R / N`` and the top ``k`` eigenpairs ``(Theta, P)`` of
+    ``D^{-1/2} S D^{-1/2}``, ``F = D^{1/2} P (Theta - I)^{1/2}`` (Lawley; see
+    Lawley and Maxwell 1971, and eq. 8 of Fukasaku et al., arXiv:2402.08181).
+    Those eigenvectors are the top ``k`` right singular vectors of
+    ``R D^{-1/2} / sqrt(N)`` and the eigenvalues its squared singular values, so
+    the step is taken from the ``(N, K)`` residual matrix and no ``K x K``
+    matrix is formed. This is the route ``sklearn.decomposition.FactorAnalysis``
+    and R's ``factanal`` both take.
+
+    Args:
+        R: Residual matrix, ``(N, K)``.
+        D: Diagonal variances, length ``K``.
+        k: Factor rank.
+
+    Returns:
+        The loadings, ``(K, k)``. Eigenvalues below 1 give zero columns.
+    """
+    N, K = R.shape
+    root_D = np.sqrt(D)
+    Z = (R / root_D[None, :]) / np.sqrt(N)
+    _, s, Vt = np.linalg.svd(Z, full_matrices=False)
+    m = min(k, s.size)
+    F = np.zeros((K, k))
+    if m > 0:
+        gain = np.sqrt(np.maximum(s[:m] ** 2 - 1.0, 0.0))
+        F[:, :m] = (root_D[:, None] * Vt[:m].T) * gain[None, :]
+    return F
 
 
 def _sigma_step(
@@ -47,76 +73,80 @@ def _sigma_step(
 ) -> tuple[np.ndarray, np.ndarray, float, int]:
     """Fit ``Sigma = F F^T + diag(D)`` to residuals ``R`` by maximum likelihood.
 
-    Both halves of the update are exact solutions of a stationarity condition,
-    so neither needs a step size or a line search.
+    ``F`` has a closed form at fixed ``D`` (:func:`_lawley_F`), so the problem
+    is concentrated to ``D`` alone and solved by L-BFGS-B on ``log D``, boxed
+    between the floor and each equation's total residual variance. This is
+    what R's ``factanal`` does, and for the reason it gives: alternating the
+    two closed forms is a fixed-point iteration that crawls when a diagonal
+    variance is small. Measured on bootstrap replicates at ``n = 20`` the
+    alternation's per-fit cost had a median of 24 ms but a mean of 142 ms and
+    a maximum of 598 ms (11,619 inner iterations); the quasi-Newton step's
+    mean is 1.7 ms and its maximum 7 ms, and on the replicate where the
+    alternation hit its cap it also found a likelihood 4.6e-4 nats/row better.
 
-    Given ``D``, the maximising ``F`` is available in closed form (Lawley; see
-    Lawley and Maxwell 1971, and eq. 8 of Fukasaku et al., arXiv:2402.08181).
-    Writing ``S = R^T R / N``, the loadings are
-
-        F = D^{1/2} P (Theta - I)^{1/2}
-
-    for the top ``k`` eigenpairs ``(Theta, P)`` of ``D^{-1/2} S D^{-1/2}``. Those
-    eigenvectors are the top ``k`` right singular vectors of
-    ``R D^{-1/2} / sqrt(N)`` and the eigenvalues are its squared singular values,
-    so the step is taken from the ``(N, K)`` residual matrix and no ``K x K``
-    matrix is ever formed. This is the same route
-    ``sklearn.decomposition.FactorAnalysis`` takes.
-
-    Given ``F``, ``D = diag(S - F F^T)`` is the other stationarity condition.
-
-    Note what this is not: the pair is a fixed point of the joint conditions,
-    **not** coordinate-wise maximisation, because ``diag(S - F F^T)`` is not the
-    conditional maximiser of ``D`` at fixed ``F`` (that condition,
-    ``diag(Sigma^{-1}(Sigma - S)Sigma^{-1}) = 0``, has no closed form). So the
-    likelihood is not guaranteed to fall on every iteration and the loop must
-    measure it rather than assume it. The best iterate seen is what is returned,
-    which is what keeps the sweep-level trace non-increasing.
+    The gradient is the envelope theorem: at the profile, ``F`` is optimal, so
+    ``d nll / d D_j`` is the partial at fixed ``F``,
+    ``0.5 [(Sigma^{-1})_jj - (Sigma^{-1} S Sigma^{-1})_jj]``, both of which the
+    Woodbury kernels give without forming ``K x K``. Verified against finite
+    differences to 3.7e-9.
 
     Args:
         R: Residual matrix, ``(N, K)``.
         D: Starting diagonal variances, length ``K``.
         k: Factor rank.
         d_floor_eff: Smallest permitted variance, already scaled to the data.
-        max_iter: Iteration cap.
-        tol: Relative decrease below which the alternation stops.
+        max_iter: Iteration cap for the optimiser.
+        tol: Relative decrease of the objective below which it stops.
 
     Returns:
-        The best ``(F, D, nll)`` found by negative log-likelihood per row, and
-        the number of inner iterations run.
+        ``(F, D, nll, iters)``: the fit, its negative log-likelihood per row,
+        and the number of optimiser iterations.
     """
     N, K = R.shape
     diag_S = np.sum(R**2, axis=0) / N
 
-    best_F = np.zeros((K, k))
-    best_D = np.asarray(D, dtype=float).copy()
-    best_nll = float(nll_per_row(R, best_F, best_D))
+    # Solve on residuals standardised to unit variance, as factanal does on a
+    # correlation matrix, and map back. diag(1/sd) Sigma diag(1/sd) is
+    # (F/sd)(F/sd)^T + diag(D/sd^2), so the structure survives, and the
+    # standardised problem is the same problem at every scale of Y. That is
+    # what makes the fit scale-equivariant: the optimiser's stopping rules are
+    # not scale-free (L-BFGS-B's ftol is relative to max(|f|, 1), and the NLL
+    # shifts by K log s under Y -> sY), and on a flat likelihood a different
+    # stopping point is a different local optimum.
+    sd = np.sqrt(np.maximum(diag_S, d_floor_eff))
+    Rs = R / sd[None, :]
+    floor_s = d_floor_eff / float(np.min(sd) ** 2)
+    log_lo = np.log(floor_s)
+    # A unique variance cannot exceed the equation's total variance (1 after
+    # standardising); the tiny slack keeps the closed form off an exact
+    # zero-loading corner.
+    log_hi = np.full(K, np.log1p(1e-9))
+    z0 = np.clip(np.log(np.asarray(D, dtype=float) / sd**2), log_lo, log_hi)
 
-    iters = 0
-    for _ in range(max_iter):
-        iters += 1
-        root_D = np.sqrt(D)
-        # Z^T Z = D^{-1/2} S D^{-1/2}, so the right singular vectors of Z carry
-        # the eigenvectors wanted and s**2 the eigenvalues.
-        Z = (R / root_D[None, :]) / np.sqrt(N)
-        _, s, Vt = np.linalg.svd(Z, full_matrices=False)
+    def objective(z: np.ndarray) -> tuple[float, np.ndarray]:
+        D_z = np.exp(z)
+        F_z = _lawley_F(Rs, D_z, k)
+        Dinv, C_chol = woodbury_chol(F_z, D_z)
+        RSinv = apply_siginv_to_matrix(Rs, F_z, D_z, Dinv=Dinv, C_chol=C_chol)
+        nll = 0.5 * (
+            float(np.sum(RSinv * Rs)) / N
+            + float(np.sum(np.log(D_z)))
+            + 2.0 * float(np.sum(np.log(np.diag(C_chol))))
+        )
+        grad_D = 0.5 * (siginv_diag(F_z, Dinv, C_chol) - np.sum(RSinv**2, axis=0) / N)
+        return nll, grad_D * D_z  # chain rule for log D
 
-        m = min(k, s.size)
-        F = np.zeros((K, k))
-        if m > 0:
-            gain = np.sqrt(np.maximum(s[:m] ** 2 - 1.0, 0.0))
-            F[:, :m] = (root_D[:, None] * Vt[:m].T) * gain[None, :]
-
-        D = np.maximum(diag_S - np.sum(F**2, axis=1), d_floor_eff)
-        nll = float(nll_per_row(R, F, D))
-
-        improved = best_nll - nll
-        if nll < best_nll:
-            best_F, best_D, best_nll = F, D, nll
-        if improved < tol * max(1.0, abs(best_nll)):
-            break
-
-    return best_F, best_D, best_nll, iters
+    res = minimize(
+        objective,
+        z0,
+        jac=True,
+        method="L-BFGS-B",
+        bounds=list(zip(np.full(K, log_lo), log_hi, strict=True)),
+        options={"maxiter": max_iter, "ftol": tol, "gtol": 1e-10},
+    )
+    D_out = np.exp(res.x) * sd**2
+    F_out = _lawley_F(R, D_out, k)
+    return F_out, D_out, float(nll_per_row(R, F_out, D_out)), int(res.nit)
 
 
 def als_gls(
@@ -130,6 +160,7 @@ def als_gls(
     cg_tol: float = 3e-7,
     *,
     rel_tol: float = 1e-6,
+    init_D: np.ndarray | None = None,
 ) -> tuple[list[np.ndarray], np.ndarray, np.ndarray, float, dict[str, Any]]:
     """Alternating GLS with a low-rank-plus-diagonal covariance.
 
@@ -162,6 +193,12 @@ def als_gls(
         cg_tol: Relative residual tolerance for that solve.
         rel_tol: Relative decrease in the negative log-likelihood below which the
             sweeps stop early.
+        init_D: Starting diagonal variances for the first Sigma step, length
+            ``K``. Defaults to the residual variances of the initial fit. A
+            bootstrap replicate passes the parent fit's ``D`` here: the
+            replicate's answer is close to the parent's, so starting from it
+            skips most of the inner alternation. Only ``D`` is needed, because
+            the Sigma step recomputes ``F`` from ``D`` in closed form.
 
     Returns:
         B_list, F, D, mem_MB_est, info: ``info`` includes ``p_list``, ``cg``
@@ -220,11 +257,20 @@ def als_gls(
     d_floor_eff = d_floor * var_ref
     lam_B_eff = lam_B / var_ref
 
-    # Per-equation ridge/OLS for B
+    # Per-equation ridge/OLS for B.
+    #
+    # This solve uses the nominal lam_B, not lam_B_eff. An OLS ridge objective
+    # ||Y - XB||^2 + lam ||B||^2 scales uniformly under Y -> sY, so B -> sB for
+    # any fixed lam; a GLS ridge (Y - XB)' Sigma^-1 (Y - XB) + lam ||B||^2 has a
+    # dimensionless first term and needs lam -> lam / s^2. The two penalties
+    # have the same relative strength when lam_ols = lam_gls * var_ref, and
+    # lam_B_eff * var_ref is lam_B. Using lam_B_eff here made the starting
+    # point scale-dependent, which the previous fixed-point Sigma step was too
+    # forgiving to expose and the quasi-Newton one is not.
     B = []
     for j, X in enumerate(Xs):
         p = X.shape[1]
-        XtX = X.T @ X + lam_B_eff * np.eye(p)
+        XtX = X.T @ X + lam_B * np.eye(p)
         Xty = X.T @ Y[:, [j]]
         try:
             B.append(np.linalg.solve(XtX, Xty))
@@ -248,7 +294,15 @@ def als_gls(
     # ----------------------------
     # Traces & baseline
     # ----------------------------
-    D0 = np.maximum(np.var(R, axis=0), d_floor_eff)
+    if init_D is None:
+        D0 = np.maximum(np.var(R, axis=0), d_floor_eff)
+    else:
+        D0 = np.asarray(init_D, dtype=float)
+        if D0.shape != (K,):
+            raise ValueError(f"init_D must have shape ({K},), got {D0.shape}")
+        if not np.isfinite(D0).all() or (D0 <= 0).any():
+            raise ValueError("init_D must be finite and strictly positive")
+        D0 = np.maximum(D0, d_floor_eff)
     F, D, nll_prev, n_inner = _sigma_step(R, D0, k, d_floor_eff)
     nll_trace = [nll_prev]
     nll_beta_trace: list[float] = []

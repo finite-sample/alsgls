@@ -44,7 +44,8 @@ from alsgls import ALSGLSSystem, als_gls
 from alsgls.ops import XB_from_Blist
 
 REPS = 300
-N, K, P, RANK = 200, 4, 3, 2
+# Rank 1: K = 4 equations identify only a single factor (Ledermann's bound).
+N, K, P, RANK = 200, 4, 3, 1
 
 
 def _fixed_truth(seed: int = 0):

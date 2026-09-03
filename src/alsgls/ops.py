@@ -222,6 +222,50 @@ def apply_siginv_F(F: np.ndarray, Dinv: np.ndarray, C_chol: np.ndarray) -> np.nd
     return np.asarray(DinvF - correction)
 
 
+def df_rescaled(
+    F: np.ndarray, D: np.ndarray, n: int, p_list: Sequence[int]
+) -> tuple[np.ndarray, np.ndarray]:
+    """Rescale a fitted low-rank covariance for the residual degrees of freedom.
+
+    ``Sigma_hat`` is estimated from residuals of a fitted model, so its entries
+    are biased toward zero by the fitting; the correction every SUR package
+    applies is ``Sigma_ij * n / sqrt((n - p_i)(n - p_j))`` (linearmodels
+    ``debiased=True``, R systemfit ``methodResidCov="geomean"``, Stata
+    ``sureg, dfk``). That elementwise scaling is ``diag(sqrt(c)) Sigma
+    diag(sqrt(c))`` with ``c_i = n / (n - p_i)``, and since
+
+        diag(sqrt(c)) (F F' + diag(D)) diag(sqrt(c))
+            = (diag(sqrt(c)) F)(diag(sqrt(c)) F)' + diag(c * D),
+
+    it preserves the low-rank-plus-diagonal structure exactly. Scale row ``i``
+    of ``F`` by ``sqrt(c_i)`` and ``D_i`` by ``c_i``.
+
+    This corrects the bias in ``Sigma_hat`` itself. It does nothing about the
+    variance of ``Sigma_hat``, which is the larger part of the finite-sample
+    shortfall in the plug-in standard errors; see ``BootstrapResults``.
+
+    Args:
+        F: Factor loadings, ``(K, k)``.
+        D: Diagonal variances, length ``K``.
+        n: Number of rows each equation was fitted on.
+        p_list: Number of regressors in each equation, length ``K``.
+
+    Returns:
+        The rescaled ``(F, D)``.
+
+    Raises:
+        ValueError: If any equation has no residual degrees of freedom.
+    """
+    p_arr = np.asarray(p_list, dtype=float)
+    if (n - p_arr <= 0).any():
+        raise ValueError(
+            "df rescale needs n > p_j in every equation; got "
+            f"n={n} and p_list={list(p_list)}"
+        )
+    c = n / (n - p_arr)
+    return np.sqrt(c)[:, None] * F, c * np.asarray(D, dtype=float)
+
+
 def compute_XtSigmaInvX(
     Xs: list[np.ndarray],
     F: np.ndarray,

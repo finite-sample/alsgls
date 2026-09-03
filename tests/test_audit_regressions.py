@@ -228,13 +228,13 @@ def test_zero_ridge_on_a_singular_design_explains_itself():
 
     n = 10
     x = np.c_[np.ones(n), np.ones(n)]  # duplicated column: rank 1 of 2
-    y = np.c_[np.linspace(0, 1, n), np.linspace(1, 0, n)]
+    y = np.c_[np.linspace(0, 1, n), np.linspace(1, 0, n), np.linspace(0, 2, n)]
 
     with pytest.raises(np.linalg.LinAlgError, match="lam_B is 0"):
-        als_gls([x, x], y, k=1, lam_B=0.0, sweeps=1)
+        als_gls([x, x, x], y, k=1, lam_B=0.0, sweeps=1)
 
     # A positive ridge still solves it.
-    als_gls([x, x], y, k=1, lam_B=1e-3, sweeps=1)
+    als_gls([x, x, x], y, k=1, lam_B=1e-3, sweeps=1)
 
 
 class TestVarianceFloorIsRelative:

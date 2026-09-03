@@ -6,6 +6,7 @@ from typing import Any
 
 import numpy as np
 
+from ._validation import max_identified_rank
 from .als import als_gls
 from .metrics import nll_per_row
 from .ops import XB_from_Blist
@@ -31,7 +32,7 @@ def _n_params(K: int, k: int, p_total: int) -> int:
 
 def _default_k_candidates(K: int) -> list[int]:
     """Generate default candidate ranks based on number of equations."""
-    max_k = min(K // 2, 12)
+    max_k = min(K // 2, 12, max_identified_rank(K))
     if max_k < 1:
         return [1]
     return list(range(1, max_k + 1))

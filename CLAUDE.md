@@ -53,12 +53,22 @@ ls examples/
 1. **β-step**: matrix-free conjugate gradient at the current Σ, using the
    Woodbury identity Σ⁻¹ = D⁻¹ - D⁻¹F(I + F^T D⁻¹F)⁻¹F^T D⁻¹ to avoid forming
    dense normal equations. Memory O(Kk) with k << K.
-2. **Σ-step**: the closed-form factor-analysis update. Given D, the maximising F
-   comes from the top-k right singular vectors of the D-standardised residuals
-   (Lawley); given F, D = diag(S - FF^T). This is the same update
-   `sklearn.decomposition.FactorAnalysis` computes. Note it is a fixed point of
-   the *joint* stationarity conditions, not coordinate-wise maximisation, so the
-   loop measures the likelihood rather than assuming descent.
+2. **Σ-step**: L-BFGS-B on the profile likelihood over log D, with F
+   concentrated out in closed form (Lawley: top-k right singular vectors of the
+   D-standardised residuals), on residuals standardised to unit variance. This
+   is what R's `factanal` does. The gradient is the envelope theorem, computed
+   with the Woodbury kernels. A pure fixed-point alternation of the two closed
+   forms (what sklearn does) was tried first and crawls when a diagonal
+   variance is small.
+
+**Inference.** `cov_params` is the plug-in `(X'Σ̂⁻¹X)⁻¹` after the df rescale
+every SUR package applies; it treats Σ̂ as known and understates in small
+samples (Freedman & Peters 1984, Theorem 1). `results.bootstrap()` refits
+everything per replicate and returns percentile-t intervals, which are the
+calibrated object. The Monte Carlo fixtures in `tests/test_standard_errors.py`
+and `tests/test_econometrics.py` must stay at an *identified* rank
+(Ledermann: `(K-k)² ≥ K+k`); they were at K=4, k=2 for a long time, which is
+not.
 
 `em_gls` was removed in 1.0; the exploratory EM code lives in `als_sim/` and is
 not installed.
