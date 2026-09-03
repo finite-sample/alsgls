@@ -81,11 +81,13 @@ This package provides a modern, type-safe implementation of **Alternating-Least-
 **Inference:**
 - **Standard errors** (`bse`), **t-statistics** (`tvalues`), **p-values**
   (`pvalues`), **confidence intervals** (`conf_int()`) and **summary tables**
-  (`summary()`), statsmodels-style. These are the plug-in
-  `(X'Σ̂⁻¹X)⁻¹` after the degrees-of-freedom rescale every SUR package applies.
-  They treat Σ̂ as known, and so understate the sampling spread in small samples
-  by a factor that tracks the covariance parameter count over `n`: measured at
-  about 0.85 at `n = 20` and 0.97 at `n = 200` on a 4-equation system.
+  (`summary()`), statsmodels-style. By default these carry the
+  **Kackar–Harville correction** for Σ being estimated — `(X'Σ̂⁻¹X)⁻¹ + Λ`
+  after the degrees-of-freedom rescale — which no other SUR implementation
+  applies. `results.covariance("plugin")` gives the uncorrected plug-in that
+  linearmodels, systemfit and Stata report. Measured on a 4-equation system,
+  reported SE over actual spread: plug-in 0.85, corrected 0.89 at `n = 20`;
+  0.94 / 0.96 at `n = 40`; both ~1.0 by `n = 200`.
 - **Calibrated small-sample inference** via `results.bootstrap(B=999)`, which
   refits the whole model on each replicate and returns percentile-*t*
   intervals and bootstrap-*t* p-values. This is the object to report when `n`

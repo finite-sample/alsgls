@@ -11,6 +11,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Kackar–Harville corrected standard errors, on by default.** `cov_params`,
+  `bse`, `conf_int`, `pvalues` and the prediction intervals now report
+  `Phi_c + Lambda`: the df-rescaled plug-in plus the first-order term for
+  `Sigma` being estimated (Kackar and Harville 1984). `covariance("plugin")`
+  returns the uncorrected plug-in that linearmodels, systemfit and Stata
+  report. Every reported standard error grows, by 4% at `n = 20`, 1% at
+  `n = 200`, on the test fixture.
+
+  Validated four ways before shipping: derivatives and information against
+  finite differences; the structured implementation against the `r^2`
+  double loop to 1e-16; `Lambda` invariant to rotating `F` to 1e-16 (which is
+  what justifies the pseudo-inverse of the singular information); and, at the
+  true `(F, D)`, `Phi + Lambda` reproduces the actual spread of the feasible
+  estimator to 0.98 where `Phi` alone gives 0.94. An independent closed form:
+  two equations with orthogonal regressors give `Lambda/Phi = 1/T` exactly.
+
+  What it is not: calibration at `n = 20`. Evaluated at `(F_hat, D_hat)` the
+  ratio is 0.885 against 0.851 for the plug-in, because `Phi_hat` is itself
+  biased by Jensen's inequality on a noisy `Sigma_hat`, and that is not what
+  `Lambda` corrects. Kenward and Roger's (1997) second-order term is meant to
+  and, measured here, makes it worse (0.774) -- the failure Kenward and Roger
+  (2009) document for covariance structures nonlinear in their parameters. It
+  is not used. `bootstrap()` remains the calibrated object at small `n`.
+
+  Cost: 5 ms at K = 20, 89 ms at K = 60, 0.5 s at K = 100, 5 s at K = 200.
+- `alsgls.kackar_harville` module; `GramBlocks` / `assemble_blocks` in
+  `alsgls.ops`, the block assembly factored out of `compute_XtSigmaInvX`.
+
+### Added
+
 - **`results.bootstrap(B, method, seed)`** on both `ALSGLSSystemResults` and
   `ALSGLS`, returning a `BootstrapResults` with percentile-*t* `conf_int()`,
   bootstrap-*t* `pvalues`, bootstrap `bse`, and the raw replicate arrays. Each
