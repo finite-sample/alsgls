@@ -12,6 +12,7 @@ from scipy import stats
 from ._validation import max_identified_rank
 from .als import als_gls
 from .bootstrap import BootstrapResults, bootstrap_system
+from .kackar_harville import kh_correction
 from .metrics import nll_per_row
 from .ops import (
     XB_from_Blist,
@@ -44,6 +45,56 @@ def _check_alpha(alpha: float) -> float:
     if not np.isfinite(alpha) or not (0.0 < float(alpha) < 1.0):
         raise ValueError(f"alpha must be in (0, 1), got {alpha}")
     return float(alpha)
+
+
+#: Covariance estimators ``covariance()`` accepts.
+COV_METHODS = ("kh", "plugin")
+
+
+def _coefficient_covariance(
+    Xs: list[np.ndarray],
+    F: np.ndarray,
+    D: np.ndarray,
+    n: int,
+    lam_B_eff: float,
+    method: str,
+) -> np.ndarray:
+    """The covariance of ``beta_hat`` by either method, shared by both estimators.
+
+    ``"plugin"`` is ``(X' Sigma_c^-1 X + lam I)^-1`` with ``Sigma_c`` the fitted
+    covariance after the residual degrees-of-freedom rescale every SUR package
+    applies (linearmodels ``debiased=True``, systemfit ``"geomean"``, Stata
+    ``dfk``). It is the variance of a GLS estimator whose covariance is known.
+
+    ``"kh"`` adds the Kackar-Harville term for the covariance being estimated,
+    ``Phi + Lambda`` with ``Lambda = sum_ij W_ij Phi (Q_ij - P_i Phi P_j) Phi``,
+    evaluated at the same rescaled ``Sigma_c``. See :mod:`alsgls.kackar_harville`
+    for what it does and does not fix.
+
+    Args:
+        Xs: Design matrices.
+        F: Fitted factor loadings.
+        D: Fitted diagonal variances.
+        n: Rows per equation.
+        lam_B_eff: The effective ridge the fit charged.
+        method: ``"kh"`` or ``"plugin"``.
+
+    Returns:
+        The ``(p_total, p_total)`` covariance.
+
+    Raises:
+        ValueError: If ``method`` is not one of :data:`COV_METHODS`.
+    """
+    if method not in COV_METHODS:
+        raise ValueError(f"method must be one of {COV_METHODS}, got {method!r}")
+    # The fit charged lam_B / var_ref, so the variance has to charge the same
+    # thing; using the nominal lam_B here would report the variance of an
+    # estimator that was never computed.
+    Fc, Dc = df_rescaled(F, D, n, [X.shape[1] for X in Xs])
+    if method == "plugin":
+        return np.linalg.inv(compute_XtSigmaInvX(Xs, Fc, Dc, lam_B=lam_B_eff))
+    Phi, Lam = kh_correction(Xs, Fc, Dc, lam_B=lam_B_eff)
+    return Phi + Lam
 
 
 def _auto_rank(num_equations: int) -> int:
@@ -269,34 +320,44 @@ class ALSGLS:
         residual = Y_arr - preds
         return -float(nll_per_row(residual, self.F_, self.D_))
 
-    @property
-    def cov_params_(self) -> np.ndarray:
-        """Plug-in variance of the coefficients, ``(X' Sigma_c^-1 X + lam I)^-1``.
+    def covariance(self, method: str = "kh") -> np.ndarray:
+        """Covariance of the coefficients by the named method.
 
-        ``Sigma_c`` is the fitted covariance rescaled for residual degrees of
-        freedom, the correction every SUR package applies. What none of them
-        corrects for, and this does not either, is that ``Sigma`` is estimated:
-        the true variance of feasible GLS exceeds this in finite samples, by a
-        factor that tracks the covariance parameter count over ``n``. Measured
-        on a 4-equation, rank-2 system the reported standard error is about
-        0.85 of the actual spread at ``n = 20`` and 0.97 at ``n = 200``. For
-        calibrated small-sample inference use :meth:`bootstrap`.
+        ``"kh"`` (default) is the Kackar-Harville corrected covariance, which
+        accounts for ``Sigma`` being estimated; ``"plugin"`` is the df-rescaled
+        plug-in that linearmodels, systemfit and Stata report. Measured on the
+        test suite's 4-equation, rank-1 fixture, the reported standard error is
+        0.85 (plug-in) and 0.89 (kh) of the actual spread at ``n = 20``, and
+        0.94 / 0.96 at ``n = 40``. Neither is calibrated at ``n = 20``; for
+        that use :meth:`bootstrap`.
+
+        Args:
+            method: ``"kh"`` or ``"plugin"``.
+
+        Returns:
+            The ``(p_total, p_total)`` covariance.
+
+        Raises:
+            RuntimeError: If the training designs were not stored.
         """
         self._ensure_fitted()
-        if not hasattr(self, "_cov_params_cache"):
+        cache = self.__dict__.setdefault("_covariance_cache", {})
+        if method not in cache:
             Xs = getattr(self, "_training_Xs", None)
             if Xs is None:
                 raise RuntimeError(
                     "Training design matrices not stored. "
-                    "cov_params_ requires re-fitting or use ALSGLSSystem."
+                    "covariance() requires re-fitting or use ALSGLSSystem."
                 )
-            # The fit charged lam_B / var_ref, so the variance has to charge the
-            # same thing; using the nominal lam_B here would report the variance
-            # of an estimator that was never computed.
-            Fc, Dc = df_rescaled(self.F_, self.D_, self.n_obs_, self.n_features_in_)
-            XtSinvX = compute_XtSigmaInvX(Xs, Fc, Dc, lam_B=self.info_["lam_B_eff"])
-            self._cov_params_cache = np.linalg.inv(XtSinvX)
-        return self._cov_params_cache
+            cache[method] = _coefficient_covariance(
+                Xs, self.F_, self.D_, self.n_obs_, self.info_["lam_B_eff"], method
+            )
+        return cache[method]
+
+    @property
+    def cov_params_(self) -> np.ndarray:
+        """The default coefficient covariance, ``covariance("kh")``."""
+        return self.covariance()
 
     def bootstrap(
         self, B: int = 999, method: str = "parametric", seed: int | None = None
@@ -621,27 +682,35 @@ class ALSGLSSystemResults:
             "loglike": self.loglike,
         }
 
+    def covariance(self, method: str = "kh") -> np.ndarray:
+        """Covariance of the coefficients by the named method.
+
+        ``"kh"`` (default) is the Kackar-Harville corrected covariance, which
+        accounts for ``Sigma`` being estimated; ``"plugin"`` is the df-rescaled
+        plug-in that linearmodels, systemfit and Stata report. Measured on the
+        test suite's 4-equation, rank-1 fixture, the reported standard error is
+        0.85 (plug-in) and 0.89 (kh) of the actual spread at ``n = 20``, and
+        0.94 / 0.96 at ``n = 40``. Neither is calibrated at ``n = 20``; for
+        that use :meth:`bootstrap`.
+
+        Args:
+            method: ``"kh"`` or ``"plugin"``.
+
+        Returns:
+            The ``(p_total, p_total)`` covariance.
+        """
+        cache = self.__dict__.setdefault("_covariance_cache", {})
+        if method not in cache:
+            Xs = [eq.X for eq in self.model.equations]
+            cache[method] = _coefficient_covariance(
+                Xs, self.F, self.D, self.model.nobs, self.info["lam_B_eff"], method
+            )
+        return cache[method]
+
     @property
     def cov_params(self) -> np.ndarray:
-        """Plug-in variance of the coefficients, ``(X' Sigma_c^-1 X + lam I)^-1``.
-
-        ``Sigma_c`` is the fitted covariance rescaled for residual degrees of
-        freedom, the correction every SUR package applies. What none of them
-        corrects for, and this does not either, is that ``Sigma`` is estimated:
-        the true variance of feasible GLS exceeds this in finite samples, by a
-        factor that tracks the covariance parameter count over ``n``. Measured
-        on a 4-equation, rank-2 system the reported standard error is about
-        0.85 of the actual spread at ``n = 20`` and 0.97 at ``n = 200``. For
-        calibrated small-sample inference use :meth:`bootstrap`.
-        """
-        if not hasattr(self, "_cov_params"):
-            Xs = [eq.X for eq in self.model.equations]
-            Fc, Dc = df_rescaled(
-                self.F, self.D, self.model.nobs, [X.shape[1] for X in Xs]
-            )
-            XtSinvX = compute_XtSigmaInvX(Xs, Fc, Dc, lam_B=self.info["lam_B_eff"])
-            self._cov_params = np.linalg.inv(XtSinvX)
-        return self._cov_params
+        """The default coefficient covariance, ``covariance("kh")``."""
+        return self.covariance()
 
     @property
     def bse(self) -> np.ndarray:

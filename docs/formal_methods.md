@@ -387,12 +387,77 @@ residual rows. Pairs resampling is deliberately absent: at $n = 20$ a
 with-replacement draw has about 63% distinct rows, and a factor covariance
 fitted to a dozen distinct $K$-vectors is not a replicate of anything.
 
-The one analytic route that scales with $r$ is Kackar–Harville / Kenward–Roger,
-which adds the missing term $\Lambda$ to $\Phi = (X^T\Sigma^{-1}X)^{-1}$ from
-$\operatorname{Cov}(\hat\theta)$ and the derivatives of $\Sigma(\theta)$. For
-$\Sigma = FF^T + \operatorname{diag}(D)$ that is novel work: $\Sigma$ is
-quadratic in $F$ and the information is singular under rotation. It is the
-natural follow-up.
+### The default standard error: Kackar–Harville
+
+Kackar and Harville (1984, *JASA* 79, 853–862) write the variance of the
+feasible estimator, to first order, as $\Phi + \Lambda$ with
+
+$$
+\Lambda = \sum_{i,j} W_{ij}\,\Phi\left(Q_{ij} - P_i \Phi P_j\right)\Phi,
+\qquad
+P_i = -X^T V^{-1}\frac{\partial V}{\partial\theta_i}V^{-1}X,
+\quad
+Q_{ij} = X^T V^{-1}\frac{\partial V}{\partial\theta_i}V^{-1}\frac{\partial V}{\partial\theta_j}V^{-1}X,
+$$
+
+$W = \operatorname{Cov}(\hat\theta)$ the inverse expected information
+$I_{ij} = \tfrac{n}{2}\operatorname{tr}(\Sigma^{-1}\partial_i\Sigma\,\Sigma^{-1}\partial_j\Sigma)$.
+Here $V = \Sigma\otimes I_n$ and $\Sigma = FF^T + \operatorname{diag}(D)$, so
+every piece is $X^T(M\otimes I)X$ for a $K\times K$ matrix $M$ — the same block
+assembly as the GLS normal matrix — with
+$\partial\Sigma/\partial F_{ab} = e_a f_b^T + f_b e_a^T$ and
+$\partial\Sigma/\partial D_a = e_a e_a^T$. `cov_params` reports
+$\Phi_c + \Lambda$ at the df-rescaled $\hat\Sigma_c$; `covariance("plugin")`
+reports $\Phi_c$ alone, which is what linearmodels, systemfit and Stata report.
+SAS ships the same first-order term as `DDFM=KR(FIRSTORDER)` and applies it to
+its factor-analytic `TYPE=FA0()` structure.
+
+**Rotation.** $F \to FQ$ leaves $\Sigma$ fixed, so $I$ is singular in
+$k(k-1)/2$ directions. Along them $\partial\Sigma/\partial\theta$ vanishes, so
+$P$ and $Q$ vanish and $\Lambda$ does not depend on how $W$ is completed there
+(two generalised inverses differ by a term supported on the null space, which
+the vanishing derivatives annihilate). $W$ is the pseudo-inverse of rank
+$r - k(k-1)/2$; the test suite checks $\Lambda(FQ) = \Lambda(F)$ to $10^{-16}$.
+
+**What it corrects, measured.** Evaluated at the *true* $(F, D)$ on the
+4-equation, rank-1 fixture at $n=20$, $\Phi+\Lambda$ gives an se ratio of 0.98
+(0.995 with the Monte Carlo $\operatorname{Cov}(\hat\theta)$ in place of
+$I^{-1}$), against 0.94 for $\Phi$ alone: the term is the FGLS-over-GLS excess,
+and it is essentially exact. An independent check: for two equations with
+orthogonal regressors and an unstructured $\Sigma$, the machinery gives
+$\Lambda/\Phi = 1/T$ exactly, for every coefficient and every correlation, and
+Monte Carlo on that design gives $1.076, 1.037, 1.010$ for
+$\operatorname{Var}/\Phi$ at $T = 20, 40, 80$ against $1.05, 1.025, 1.0125$.
+
+**What it does not correct.** Evaluated at $(\hat F, \hat D)$:
+
+| $n$ | plug-in | + df rescale | + df + Kackar–Harville (default) |
+|---|---|---|---|
+| 20 | 0.784 | 0.851 | **0.885** |
+| 40 | 0.907 | 0.943 | **0.963** |
+| 100 | 0.948 | 0.963 | **0.972** |
+| 200 | — | 0.994 | **0.996** |
+
+At $n=20$ the remaining gap is the bias of $\hat\Phi$ itself: $\hat\Sigma$ from
+an ML factor fit at $r/(nK) = 0.1$ is far noisier and more shrunk than a sample
+covariance, and $(X^T\Sigma^{-1}X)^{-1}$ is concave in $\Sigma$. With an
+*unstructured* $\hat\Sigma$ on the two-equation design the plug-in is nearly
+unbiased ($0.92$–$1.15$), so this is a factor-model effect, not a generic SUR
+one.
+
+**Why not Kenward–Roger.** Kenward and Roger (1997) add a second-order term to
+correct that bias: $\Phi_A = \hat\Phi + 2\Lambda - R^*$ with
+$R^* = \tfrac12\sum W_{ij}\Phi R_{ij}\Phi$ and $R_{ij}$ built from
+$\partial^2\Sigma$, which is nonzero here because $\Sigma$ is quadratic in $F$.
+Measured on the same fixture it makes things worse — 0.774 against the
+plug-in's 0.784 — because the expansion predicts $\hat\Phi$'s bias as $+2\%$
+when it is $-31\%$; the $O(n^{-1})$ expansion is not accurate at this
+nuisance ratio. That is the documented failure mode: Kenward and Roger (2009,
+*CSDA* 53) report the 1997 form "does not perform as well" for covariance
+structures nonlinear in their parameters, and the second-derivative term is
+also not invariant to the choice of generalised inverse under rotation. So the
+second-order term is not used, and the calibrated object at small $n$ remains
+`bootstrap()`.
 
 ### Identification
 

@@ -222,6 +222,70 @@ def apply_siginv_F(F: np.ndarray, Dinv: np.ndarray, C_chol: np.ndarray) -> np.nd
     return np.asarray(DinvF - correction)
 
 
+class GramBlocks:
+    """The cross-products ``X_j' X_l`` laid out for fast block assembly.
+
+    Every precision-weighted quantity in the SUR system is a block matrix whose
+    ``(j, l)`` block is a scalar times ``X_j' X_l``. Rather than keep the K^2
+    blocks as a list and loop over them per assembly -- which at K = 100 and
+    500 assemblies is five million Python-level block writes, and was the
+    whole cost of the Kackar-Harville correction -- the blocks are tiled once
+    into a ``(p_total, p_total)`` template, and an assembly is one gather and
+    one elementwise product.
+
+    Attributes:
+        template: ``(p_total, p_total)`` with block ``(j, l)`` equal to ``X_j' X_l``.
+        eq_of_row: Equation index of each row of the stacked coefficient vector.
+        p_list: Number of regressors per equation.
+    """
+
+    def __init__(self, Xs: Sequence[np.ndarray]) -> None:
+        """Build the template from the design matrices.
+
+        Args:
+            Xs: One design matrix per equation.
+        """
+        self.p_list = [X.shape[1] for X in Xs]
+        offsets = np.cumsum([0, *self.p_list])
+        self.eq_of_row = np.repeat(np.arange(len(Xs)), self.p_list)
+        self.template = np.zeros((offsets[-1], offsets[-1]))
+        for j, X_j in enumerate(Xs):
+            for m, X_m in enumerate(Xs):
+                self.template[
+                    offsets[j] : offsets[j + 1], offsets[m] : offsets[m + 1]
+                ] = X_j.T @ X_m
+
+
+def gram_blocks(Xs: Sequence[np.ndarray]) -> GramBlocks:
+    """Prepare :class:`GramBlocks` for the design.
+
+    Args:
+        Xs: One design matrix per equation.
+
+    Returns:
+        The tiled cross-products.
+    """
+    return GramBlocks(Xs)
+
+
+def assemble_blocks(M: np.ndarray, gram: GramBlocks) -> np.ndarray:
+    """``X' (M (x) I_n) X`` for the block-diagonal SUR design and a ``K x K`` ``M``.
+
+    Its ``(j, l)`` block is ``M[j, l] * X_j' X_l``. With ``M = Sigma^-1`` this
+    is the GLS normal matrix; with ``M = Sigma^-1 (dSigma/dtheta) Sigma^-1`` it
+    is a Kackar-Harville ``P`` matrix, and so on.
+
+    Args:
+        M: The ``K x K`` weighting matrix.
+        gram: Output of :func:`gram_blocks`.
+
+    Returns:
+        The ``(p_total, p_total)`` assembled matrix.
+    """
+    idx = gram.eq_of_row
+    return gram.template * M[np.ix_(idx, idx)]
+
+
 def df_rescaled(
     F: np.ndarray, D: np.ndarray, n: int, p_list: Sequence[int]
 ) -> tuple[np.ndarray, np.ndarray]:

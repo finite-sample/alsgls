@@ -137,7 +137,7 @@ def test_plugin_standard_errors_grew_by_the_df_factor() -> None:
     from alsgls.ops import compute_XtSigmaInvX
 
     raw = np.sqrt(np.diag(np.linalg.inv(compute_XtSigmaInvX(Xs, res.F, res.D))))
-    ratio = res.bse / raw
+    ratio = np.sqrt(np.diag(res.covariance("plugin"))) / raw
     # Exact only when every equation has the same p; here they do.
     assert np.allclose(ratio, np.sqrt(30 / 27), rtol=1e-6)
 
