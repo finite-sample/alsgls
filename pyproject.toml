@@ -7,7 +7,7 @@ name = "alsgls"
 version = "2.2.0"
 description = "Type-safe lightweight low-rank+diagonal GLS/SUR solver via ALS"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 authors = [{ name = "Gaurav Sood", email = "contact@gsood.com" }]
 license = "MIT"
 license-files = ["LICENSE"]
@@ -59,7 +59,7 @@ docs = [
 
 [tool.ruff]
 line-length = 88
-target-version = "py311"
+target-version = "py312"
 # als_sim holds exploratory notebooks and their support code, not the package.
 exclude = ["als_sim"]
 
