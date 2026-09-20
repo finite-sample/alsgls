@@ -4,7 +4,6 @@ type: software
 authors:
   - family-names: "Sood"
     given-names: "Gaurav"
-    email: "contact@gsood.com"
 title: "alsgls: Lightweight low-rank-plus-diagonal GLS/SUR estimation"
 version: 2.2.0
 date-released: 2026-09-03
