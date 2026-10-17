@@ -55,7 +55,7 @@ ls examples/
    dense normal equations. Memory O(Kk) with k << K.
 2. **Σ-step**: L-BFGS-B on the profile likelihood over log D, with F
    concentrated out in closed form (Lawley: top-k right singular vectors of the
-   D-standardised residuals), on residuals standardised to unit variance. This
+   D-standardized residuals), on residuals standardized to unit variance. This
    is what R's `factanal` does. The gradient is the envelope theorem, computed
    with the Woodbury kernels. A pure fixed-point alternation of the two closed
    forms (what sklearn does) was tried first and crawls when a diagonal
@@ -86,7 +86,7 @@ Tests focus on:
 - Shape consistency of returned parameters
 - MSE improvement over baseline ridge regression
 - Numerical stability with different problem sizes
-- Convergence: the fit must match what an independent optimiser (L-BFGS-B, and
+- Convergence: the fit must match what an independent optimizer (L-BFGS-B, and
   `sklearn.decomposition.FactorAnalysis`) reaches on the same objective
 - Rank recovery: BIC must select the true rank on known-truth fixtures
 - Invariances: scale equivariance under Y -> sY, Zellner's identical-regressors

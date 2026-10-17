@@ -27,7 +27,7 @@ this nuisance-parameter ratio and made the estimate worse (0.77). That is the
 documented failure mode -- Kenward and Roger (2009, CSDA 53) report the 1997
 formula "does not perform as well" for covariance structures nonlinear in
 their parameters, and the ``mmrm`` package notes the adjusted estimate is not
-invariant to reparameterising ``theta``. So this module implements the
+invariant to reparameterizing ``theta``. So this module implements the
 first-order term only, which is what SAS ships as ``DDFM=KR(FIRSTORDER)`` and
 applies to its factor-analytic ``TYPE=FA0()`` structure. The calibrated object
 at small ``n`` remains the bootstrap.
@@ -39,7 +39,7 @@ the fit here is ML, so the ML information is the consistent choice.
 Rotation. ``F -> F Q`` leaves ``Sigma`` fixed for orthogonal ``Q``, so the
 information for ``theta`` is singular in ``k(k-1)/2`` directions. Along them
 ``dSigma/dtheta`` vanishes, so ``P`` and ``Q`` vanish and ``Lambda`` does not
-depend on how ``W`` is completed there: two generalised inverses differ by a
+depend on how ``W`` is completed there: two generalized inverses differ by a
 term supported on the null space, which the vanishing derivatives annihilate.
 ``W`` is taken as the pseudo-inverse of rank ``r - k(k-1)/2``, and the tests
 check ``Lambda`` is invariant to rotating ``F_hat`` to machine precision. (The
@@ -99,7 +99,7 @@ def covariance_information(Sigma: np.ndarray, dS: np.ndarray, n: int) -> np.ndar
     result for Gaussian covariance parameters, with the ``n`` because each of
     the ``n`` rows contributes independently. Takes ``Sigma`` and its
     derivatives rather than ``(F, D)`` so the same code serves any
-    parameterisation; the tests use it with an unstructured ``Sigma``.
+    parameterization; the tests use it with an unstructured ``Sigma``.
 
     Args:
         Sigma: The ``K x K`` covariance.
@@ -147,7 +147,7 @@ def lambda_from_derivatives(
     lam_B: float = 0.0,
     gram: GramBlocks | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """``(Phi, Lambda)`` for any covariance parameterisation given its derivatives.
+    """``(Phi, Lambda)`` for any covariance parameterization given its derivatives.
 
     Uses the structure that keeps this affordable at large ``K``. With
     ``W = sum_s w_s v_s v_s'`` and ``Delta_s = sum_i v_si dSigma_i``,

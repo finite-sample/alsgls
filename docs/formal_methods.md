@@ -176,7 +176,7 @@ Solved via matrix-free conjugate gradient using the Woodbury identity.
 
 ### Sigma-Step: Closed Form
 
-Given $D$, the maximising $F$ is available in closed form. Write $S = R^T R / N$
+Given $D$, the maximizing $F$ is available in closed form. Write $S = R^T R / N$
 and let $(\theta_1, p_1), \dots, (\theta_K, p_K)$ be the eigenpairs of
 $D^{-1/2} S D^{-1/2}$ in decreasing order, $P = (p_1, \dots, p_k)$ and
 $\Theta = \mathrm{diag}(\theta_1, \dots, \theta_k)$. Then
@@ -209,7 +209,7 @@ maximiser of $D$ at fixed $F$. That condition is
 $\mathrm{diag}\!\left(\Sigma^{-1}(\Sigma - S)\Sigma^{-1}\right) = 0$, which has
 no closed-form solution. The pair above is a fixed point of the *joint*
 stationarity conditions, so alternating them is a fixed-point iteration rather
-than coordinate-wise maximisation and carries no descent guarantee of its own.
+than coordinate-wise maximization and carries no descent guarantee of its own.
 The implementation therefore evaluates the likelihood at every inner iteration
 and returns the best iterate seen, which is what makes Theorem 1 hold.
 
@@ -222,7 +222,7 @@ and returns the best iterate seen, which is what makes Theorem 1 hold.
 **Statement:** The NLL sequence $\{\ell^{(t)}\}$ is non-increasing: $\ell^{(t+1)} \leq \ell^{(t)}$.
 
 **Proof:**
-- The β-step minimises NLL exactly at fixed $\Sigma$, and reverts if the solve
+- The β-step minimizes NLL exactly at fixed $\Sigma$, and reverts if the solve
   lands short
 - The Σ-step returns the best iterate it evaluated, and is only accepted if it
   improves on the incumbent
@@ -239,7 +239,7 @@ the update.
 
 **Statement:** Under regularity conditions, the sequence $(\beta^{(t)}, F^{(t)}, D^{(t)})$ converges to a stationary point of $\ell$.
 
-Both blocks are now exact, so there is no separate penalised objective to
+Both blocks are now exact, so there is no separate penalized objective to
 converge to instead: with $\lambda_B = 0$ the fixed point is the maximum
 likelihood estimate. The ridge $\lambda_B$ is expressed relative to the residual
 variance scale, so the fit is equivariant under $Y \to sY$ rather than depending
@@ -415,7 +415,7 @@ its factor-analytic `TYPE=FA0()` structure.
 **Rotation.** $F \to FQ$ leaves $\Sigma$ fixed, so $I$ is singular in
 $k(k-1)/2$ directions. Along them $\partial\Sigma/\partial\theta$ vanishes, so
 $P$ and $Q$ vanish and $\Lambda$ does not depend on how $W$ is completed there
-(two generalised inverses differ by a term supported on the null space, which
+(two generalized inverses differ by a term supported on the null space, which
 the vanishing derivatives annihilate). $W$ is the pseudo-inverse of rank
 $r - k(k-1)/2$; the test suite checks $\Lambda(FQ) = \Lambda(F)$ to $10^{-16}$.
 
@@ -455,7 +455,7 @@ when it is $-31\%$; the $O(n^{-1})$ expansion is not accurate at this
 nuisance ratio. That is the documented failure mode: Kenward and Roger (2009,
 *CSDA* 53) report the 1997 form "does not perform as well" for covariance
 structures nonlinear in their parameters, and the second-derivative term is
-also not invariant to the choice of generalised inverse under rotation. So the
+also not invariant to the choice of generalized inverse under rotation. So the
 second-order term is not used, and the calibrated object at small $n$ remains
 `bootstrap()`.
 

@@ -154,7 +154,7 @@ def test_lambda_is_invariant_to_rotating_F(K: int, k: int) -> None:
 def test_two_equation_orthogonal_sur_gives_lambda_over_phi_of_one_over_T(T, k1, k2):
     """Two equations, orthogonal regressors, unstructured 2x2 Sigma: the
     Kackar-Harville excess variance is exactly 1/T for every coefficient, for
-    every correlation. The factor-model code never sees this parameterisation,
+    every correlation. The factor-model code never sees this parameterization,
     so agreement here is evidence about the Lambda machinery itself. Monte
     Carlo on the same design (4000 replicates, run when this was written)
     gives 1.076, 1.037 and 1.010 for var/Phi against 1.050, 1.025 and 1.0125:

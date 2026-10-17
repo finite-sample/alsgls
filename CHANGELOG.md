@@ -65,7 +65,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **The Sigma step is now L-BFGS-B on the profile likelihood over `log D`**,
-  with `F` concentrated out in closed form, on residuals standardised to unit
+  with `F` concentrated out in closed form, on residuals standardized to unit
   variance — exactly what R's `factanal` does, and for the reason it gives:
   alternating the two closed forms is a fixed-point iteration that crawls when
   a diagonal variance is small. On bootstrap replicates at `n = 20` the
@@ -82,7 +82,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`debiased=True`), R `systemfit` (`"geomean"`) and Stata `sureg` (`dfk`) all
   apply. Applied as `F -> diag(sqrt c) F`, `D -> c * D`, which preserves the
   low-rank structure exactly. Standard errors grow by `sqrt(n / (n - p))`.
-- **The OLS ridge initialisation uses the nominal `lam_B`**, not the
+- **The OLS ridge initialization uses the nominal `lam_B`**, not the
   GLS-scaled `lam_B_eff`. An OLS ridge objective scales uniformly under
   `Y -> sY`, so a fixed penalty is what gives `B -> sB`; the GLS objective has a
   dimensionless first term and needs `lam / s^2`. Using the GLS scaling in the
@@ -130,10 +130,10 @@ carries everything in those two sections.
   likelihood the same objective reaches from the same starting point. Running
   more sweeps did not help: 500 sweeps produced bit-identical output to 4.
 
-  Given `D`, the maximising `F` has a closed form going back to Lawley, obtained
+  Given `D`, the maximizing `F` has a closed form going back to Lawley, obtained
   from the top `k` right singular vectors of the `D`-standardised residuals.
   This is what `sklearn.decomposition.FactorAnalysis` computes and what R's
-  `stats::factanal` optimises over; the new implementation agrees with sklearn's
+  `stats::factanal` optimizes over; the new implementation agrees with sklearn's
   to 1e-7 on the implied covariance and to 1e-9 on the likelihood.
 
   The visible consequence is rank selection. `select_rank_bic` chose 4, 8, 6, 7
@@ -153,7 +153,7 @@ carries everything in those two sections.
 - **`lam_F`**, from `als_gls`, `ALSGLS` and `ALSGLSSystem`. The Σ-step is the
   exact conditional solution, so there is no search direction for a penalty on
   `F` to bias. It never described a coherent estimator: the direction was
-  penalised while acceptance was tested on the unpenalised likelihood, so the
+  penalized while acceptance was tested on the unpenalised likelihood, so the
   iteration could stop at a point stationary for neither, and it was the sole
   cause of the scale-dependence above.
 - **`scale_correct` and `scale_floor`.** The guarded rescaling of Σ existed to
@@ -187,7 +187,7 @@ carries everything in those two sections.
   complementary `df = ((K-k)^2 - K - k)/2`.
 - **Out-of-domain arguments were accepted silently.** `lam_B = nan` passed the
   non-negativity guard, since `nan < 0` is False, and returned `F` at its
-  initialisation with no error. `alpha` outside `(0, 1)` returned intervals
+  initialization with no error. `alpha` outside `(0, 1)` returned intervals
   whose lower bound exceeded their upper for every parameter. `d_floor <= 0`
   let `D` reach zero or go negative while the internals clipped at `1e-12`, so
   the returned `(F, D)` described a different and not positive definite `Sigma`

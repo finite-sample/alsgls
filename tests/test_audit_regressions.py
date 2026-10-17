@@ -25,7 +25,7 @@ from alsgls.ops import (
 class TestRegularizationIsNotOverridden:
     """``_sanitize_regularization_params`` validates that lam >= 0 is legal.
 
-    An explicit request for lam = 0 must therefore be honoured, not replaced
+    An explicit request for lam = 0 must therefore be honored, not replaced
     by the default.
     """
 
@@ -216,7 +216,7 @@ def test_zero_ridge_on_a_singular_design_explains_itself():
     """lam_B = 0 on a rank-deficient X must say why, not emit "Singular matrix".
 
     lam_B was floored at 1e-3 by a falsy-zero bug, so a rank-deficient design
-    was quietly ridged into solvability. Honouring lam_B = 0 exposes the
+    was quietly ridged into solvability. Honoring lam_B = 0 exposes the
     singularity, which is correct -- but the message has to name the cause,
     and it must not silently substitute a pseudo-inverse, which would be the
     same class of quiet substitution the falsy-zero fix removed.

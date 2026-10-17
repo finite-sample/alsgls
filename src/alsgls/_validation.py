@@ -166,7 +166,7 @@ def _validate_rank_parameter(k: Any, N: int, K: int, *, name: str = "k") -> int:
             raise ValueError(
                 f"No factor rank is identified for K={K} equations: a one-factor "
                 "model needs at least three. With so few equations there is no "
-                "cross-equation covariance worth modelling; fit each by OLS."
+                "cross-equation covariance worth modeling; fit each by OLS."
             )
         raise ValueError(
             f"{name}={k_int} is not identified for K={K} equations: the factor model "

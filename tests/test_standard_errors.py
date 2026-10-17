@@ -661,7 +661,7 @@ def _ols_by_equation(Xs, Y):
     asymptotics involved. It ignores the cross-equation correlation and so throws
     away the efficiency the package exists to recover, which is not what is being
     tested here: ``se_ratio`` compares each estimator's reported standard error
-    to *its own* spread, so a less efficient estimator is not penalised.
+    to *its own* spread, so a less efficient estimator is not penalized.
 
     Args:
         Xs: Design matrices.
@@ -938,7 +938,7 @@ def test_the_deficit_shrinks_as_the_sample_grows(index):
     against 0.93 to 0.96.
 
     This is also the test that would fail if somebody "fixed" the small-sample
-    behaviour by inflating every standard error by a constant: the deficit would
+    behavior by inflating every standard error by a constant: the deficit would
     stop shrinking with n, because a constant does not.
 
     Args:

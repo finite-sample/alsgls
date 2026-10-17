@@ -104,6 +104,7 @@ exclude = '\.venv|tests|docs'
 arg-type-hints-in-signature = true
 
 [tool.codespell]
+builtin = "clear,rare,en-GB_to_en-US"
 # ALS (alternating least squares) is the package's subject, not a typo.
 ignore-words-list = "als"
 

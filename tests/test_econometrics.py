@@ -103,7 +103,7 @@ def test_the_coefficients_are_unbiased(equation):
     """E[B_hat] must equal B_true, equation by equation.
 
     Parametrised by equation rather than averaged over all of them, because a
-    bias in one equation cancelling a bias in another would pass a pooled test.
+    bias in one equation canceling a bias in another would pass a pooled test.
 
     Args:
         equation: Which equation's first coefficient to track.
@@ -138,7 +138,7 @@ def test_the_ridge_penalty_is_caught_biasing_toward_zero():
 
     result = monte_carlo(replicate, truth=target, reps=REPS, seed=99)
     with pytest.raises(AssertionError, match="Monte Carlo"):
-        assert_unbiased(result, "heavily penalised coefficient")
+        assert_unbiased(result, "heavily penalized coefficient")
 
     # Shrinkage pulls toward zero, so the estimate must sit between zero and the
     # truth -- a bias in the other direction would be a different bug.
@@ -236,9 +236,9 @@ def test_a_deliberately_narrow_interval_is_caught():
         pred = results.get_prediction({f"eq{j}": x_new[j] for j in range(K)})
         interval = pred.conf_int_obs(alpha=0.05)
 
-        centre = float(pred.predicted_mean[0, 0])
+        center = float(pred.predicted_mean[0, 0])
         half = 0.5 * (float(interval[0, 0, 1]) - float(interval[0, 0, 0])) / 2.0
-        hit = centre - half <= float(y_new[0, 0]) <= centre + half
+        hit = center - half <= float(y_new[0, 0]) <= center + half
         return Estimate(value=float(hit))
 
     result = monte_carlo(replicate, truth=0.95, reps=400, seed=3)

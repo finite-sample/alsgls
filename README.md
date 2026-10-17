@@ -134,7 +134,7 @@ The ALS implementation achieves the same statistical performance while using onl
   applied relative to the residual variance scale so the fit does not depend on
   the units of `Y`. Raise it (e.g. `1e-2`) if CG struggles to converge. There is
   no penalty on the factor loadings: the Σ-step is the exact conditional
-  solution, so there is nothing for one to regularise.
+  solution, so there is nothing for one to regularize.
 - **Noise floor (`d_floor`)** – Keeps the diagonal component positive; the
   default `1e-8` is a fraction of the mean residual variance, not an absolute
   variance, so it transforms correctly under a change of units. Increase it in

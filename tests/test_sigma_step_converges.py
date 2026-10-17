@@ -54,7 +54,7 @@ def test_the_default_sweep_budget_is_enough(K: int, k: int, seed: int):
 @pytest.mark.parametrize(("K", "k", "seed"), CASES)
 def test_trace_stays_non_increasing(K: int, k: int, seed: int) -> None:
     """The inner alternation is a fixed-point iteration on the joint stationarity
-    conditions, not coordinate-wise maximisation, so it carries no descent
+    conditions, not coordinate-wise maximization, so it carries no descent
     guarantee of its own. _sigma_step returning its best iterate is what makes
     the sweep-level trace monotone, and this is the test of that."""
     _, _, (_, _, _, _, info) = _fit(K, k, seed, sweeps=40, rel_tol=0.0)
@@ -95,7 +95,7 @@ RANK_CASES = [(12, 2, 1), (20, 4, 7), (30, 5, 3), (16, 3, 9), (24, 6, 13)]
 
 @pytest.mark.parametrize(("K", "true_k", "seed"), RANK_CASES)
 def test_the_likelihood_is_non_increasing_in_the_rank(K, true_k, seed) -> None:
-    """A rank-k model nests rank-(k-1), so its maximised likelihood cannot be
+    """A rank-k model nests rank-(k-1), so its maximized likelihood cannot be
     worse. A fit that stops short breaks this, because how far short it stops
     varies with k. Measured rises of up to 2.0 nats/row before the change."""
     Xs, Y, _, _ = simulate_sur(N_tr=200, N_te=5, K=K, p=3, k=true_k, seed=seed)

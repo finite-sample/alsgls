@@ -55,7 +55,7 @@ def test_every_scheme_runs_and_has_the_right_shapes(fitted, method: str) -> None
 
 def test_interval_is_studentised_not_symmetric(fitted) -> None:
     """Percentile-t uses separate lower and upper quantiles of t*, so the
-    interval need not be centred on the estimate. Check the construction
+    interval need not be centered on the estimate. Check the construction
     against a direct computation."""
     boot = fitted.bootstrap(B=60, seed=1)
     lo_q = np.quantile(boot.tstats, 0.025, axis=0)

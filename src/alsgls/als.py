@@ -31,7 +31,7 @@ _SIGMA_TOL = 1e-12
 
 
 def _lawley_F(R: np.ndarray, D: np.ndarray, k: int) -> np.ndarray:
-    """The maximising ``F`` at fixed ``D``, in closed form.
+    """The maximizing ``F`` at fixed ``D``, in closed form.
 
     For ``S = R^T R / N`` and the top ``k`` eigenpairs ``(Theta, P)`` of
     ``D^{-1/2} S D^{-1/2}``, ``F = D^{1/2} P (Theta - I)^{1/2}`` (Lawley; see
@@ -95,20 +95,20 @@ def _sigma_step(
         D: Starting diagonal variances, length ``K``.
         k: Factor rank.
         d_floor_eff: Smallest permitted variance, already scaled to the data.
-        max_iter: Iteration cap for the optimiser.
+        max_iter: Iteration cap for the optimizer.
         tol: Relative decrease of the objective below which it stops.
 
     Returns:
         ``(F, D, nll, iters)``: the fit, its negative log-likelihood per row,
-        and the number of optimiser iterations.
+        and the number of optimizer iterations.
     """
     N, K = R.shape
     diag_S = np.sum(R**2, axis=0) / N
 
-    # Solve on residuals standardised to unit variance, as factanal does on a
+    # Solve on residuals standardized to unit variance, as factanal does on a
     # correlation matrix, and map back. diag(1/sd) Sigma diag(1/sd) is
     # (F/sd)(F/sd)^T + diag(D/sd^2), so the structure survives, and the
-    # standardised problem is the same problem at every scale of Y. That is
+    # standardized problem is the same problem at every scale of Y. That is
     # what makes the fit scale-equivariant: the optimiser's stopping rules are
     # not scale-free (L-BFGS-B's ftol is relative to max(|f|, 1), and the NLL
     # shifts by K log s under Y -> sY), and on a flat likelihood a different
@@ -118,7 +118,7 @@ def _sigma_step(
     floor_s = d_floor_eff / float(np.min(sd) ** 2)
     log_lo = np.log(floor_s)
     # A unique variance cannot exceed the equation's total variance (1 after
-    # standardising); the tiny slack keeps the closed form off an exact
+    # standardizing); the tiny slack keeps the closed form off an exact
     # zero-loading corner.
     log_hi = np.full(K, np.log1p(1e-9))
     z0 = np.clip(np.log(np.asarray(D, dtype=float) / sd**2), log_lo, log_hi)
@@ -173,7 +173,7 @@ def als_gls(
         Xs: One design matrix per equation, each ``(N, p_j)``. The equations may
             have different numbers of regressors.
         Y: Responses, ``(N, K)``, one column per equation.
-        k: Rank of the latent factor block. The covariance is modelled as
+        k: Rank of the latent factor block. The covariance is modeled as
             ``F F^T + D`` with ``F`` of shape ``(K, k)``, so ``k`` controls how
             much cross-equation dependence is shared; ``k << K`` is the point.
         lam_B: Ridge penalty on the coefficients ``beta``, expressed relative to
@@ -383,7 +383,7 @@ def als_gls(
     # are entitled to assume the two agree: compute_XtSigmaInvX gives
     # (X' Sigma^-1 X)^-1 as the variance of beta, which is the right variance
     # only when beta is the GLS estimator at that Sigma. One more CG solve at
-    # the final (F, D) makes the returned pair mutually consistent. Minimising
+    # the final (F, D) makes the returned pair mutually consistent. Minimizing
     # over beta at fixed Sigma cannot raise the NLL, and the same revert guard
     # as in the sweep keeps the trace non-increasing if CG lands short.
     if sweeps > 0:
