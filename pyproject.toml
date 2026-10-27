@@ -42,7 +42,7 @@ dev = [
 # simcheck is Monte Carlo test machinery. A dependency-group, not an extra: a
 # direct URL in published metadata is rejected by PyPI.
 test = [
-  "simcheck @ git+https://github.com/finite-sample/simcheck",
+  "simcheck",
   "pytest>=8",
   "pytest-cov>=6",
   # An independent implementation of the same covariance estimator, used as an
@@ -120,3 +120,7 @@ addopts = ["--strict-config", "--strict-markers", "-ra"]
 source = ["src"]
 
 [tool.preen]
+
+[tool.uv.sources]
+# The statistical test helper is unrelated to the simcheck package on PyPI.
+simcheck = { git = "https://github.com/finite-sample/simcheck" }
