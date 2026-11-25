@@ -16,7 +16,7 @@ classifiers = [
   "Programming Language :: Python :: 3",
 ]
 dependencies = [
-  "numpy>=1.21",
+  "numpy>=2.1.0",
   "scipy>=1.17.1",
 ]
 
@@ -26,7 +26,7 @@ Documentation = "https://finite-sample.github.io/alsgls/"
 Repository = "https://github.com/finite-sample/alsgls"
 
 [project.optional-dependencies]
-pandas = ["pandas>=1.0"]
+pandas = ["pandas>=2.2.3"]
 
 [tool.uv.build-backend]
 module-name = "alsgls"

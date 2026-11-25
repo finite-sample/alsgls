@@ -72,8 +72,8 @@ test = [
 
 [package.metadata]
 requires-dist = [
-    { name = "numpy", specifier = ">=1.21" },
-    { name = "pandas", marker = "extra == 'pandas'", specifier = ">=1.0" },
+    { name = "numpy", specifier = ">=2.1.0" },
+    { name = "pandas", marker = "extra == 'pandas'", specifier = ">=2.2.3" },
     { name = "scipy", specifier = ">=1.17.1" },
 ]
 provides-extras = ["pandas"]
